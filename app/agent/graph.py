@@ -1,18 +1,13 @@
 """Grafo LangGraph do SAP Integration Copilot.
 
-Fluxo linear (v2 - com conector):
+Fluxo linear:
 
     connector -> retrieve -> diagnose -> report
 
-  connector : se um interface_type/identifier foi informado, busca
-              dados simulados do sistema SAP (OData/RFC) ANTES de
-              qualquer outra coisa - representa "o que o sistema
-              realmente reportou", nao so o texto digitado pelo usuario
-  retrieve  : consulta a base de incidentes (Qdrant), usando a
-              descricao + dados do conector (se houver) como query
-  diagnose  : chama o LLM local (Ollama) com o contexto recuperado e
-              os dados do conector, pede causa raiz/confianca/passos
-  report    : formata a resposta final em Markdown
+Instrumentado com Langfuse: cada node vira um span (@observe), e a
+chamada ao LLM é rastreada via CallbackHandler do LangChain -
+tempo, tokens e custo de cada etapa ficam visiveis em
+http://localhost:3000.
 
 Uso:
     from app.agent.graph import run_diagnosis
@@ -21,16 +16,32 @@ Uso:
     result = run_diagnosis(IncidentRequest(description="..."))
 """
 import json
+import os
 from typing import TypedDict
 
+from app.config import settings
+
+# Bridge das credenciais do .env (via app.config) para as variaveis
+# de ambiente que o SDK do Langfuse espera - cobre os dois nomes
+# possiveis (LANGFUSE_HOST e LANGFUSE_BASE_URL), para nao depender
+# de qual convencao a versao instalada do SDK usa internamente.
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", settings.langfuse_public_key)
+os.environ.setdefault("LANGFUSE_SECRET_KEY", settings.langfuse_secret_key)
+os.environ.setdefault("LANGFUSE_HOST", settings.langfuse_host)
+os.environ.setdefault("LANGFUSE_BASE_URL", settings.langfuse_host)
+
 from langchain_ollama import ChatOllama
+from langfuse import get_client, observe
+from langfuse.langchain import CallbackHandler
 from langgraph.graph import END, StateGraph
 
 from app.connectors import ConnectorResult, get_connector
 from app.models import DiagnosisResponse, IncidentRequest
 from app.rag.retriever import retrieve
 
-LLM_MODEL = "qwen2.5-coder:32b"
+LLM_MODEL = settings.llm_model
+
+_langfuse_handler = CallbackHandler()
 
 
 class CopilotState(TypedDict, total=False):
@@ -46,6 +57,7 @@ class CopilotState(TypedDict, total=False):
     debug: bool
 
 
+@observe(name="connector")
 def connector_node(state: CopilotState) -> CopilotState:
     interface_type = state.get("interface_type")
     if not interface_type:
@@ -66,6 +78,7 @@ def _effective_query(state: CopilotState) -> str:
     return base
 
 
+@observe(name="retrieve")
 def retrieve_node(state: CopilotState) -> CopilotState:
     hits = retrieve(_effective_query(state), target="incidents", top_k=3)
     return {"retrieved_context": hits}
@@ -147,6 +160,7 @@ do conector confirmando o diagnostico, a confidence pode ser mais alta
 (o dado do sistema e mais confiavel que so a descricao textual)."""
 
 
+@observe(name="diagnose")
 def diagnose_node(state: CopilotState) -> CopilotState:
     llm = ChatOllama(model=LLM_MODEL, temperature=0.0, seed=42)
     prompt = _build_diagnosis_prompt(state)
@@ -158,7 +172,7 @@ def diagnose_node(state: CopilotState) -> CopilotState:
         print(prompt)
         print("=" * 60)
 
-    response = llm.invoke(prompt)
+    response = llm.invoke(prompt, config={"callbacks": [_langfuse_handler]})
     raw = response.content.strip()
 
     if state.get("debug"):
@@ -183,9 +197,6 @@ def diagnose_node(state: CopilotState) -> CopilotState:
         }
 
     # Guardrail deterministico: nao confia so na autoavaliacao do LLM.
-    # Se o conector caiu no fallback generico (identificador nao
-    # reconhecido), o codigo IMPOE um teto de confianca, independente
-    # do que o modelo tenha respondido.
     data = state.get("connector_data")
     if data and data.is_fallback:
         original_confidence = float(diagnosis.get("confidence", 0.0))
@@ -200,6 +211,7 @@ def diagnose_node(state: CopilotState) -> CopilotState:
     return {"diagnosis": diagnosis}
 
 
+@observe(name="report")
 def report_node(state: CopilotState) -> CopilotState:
     diagnosis = state.get("diagnosis", {})
     sources = ", ".join(
@@ -265,6 +277,7 @@ def get_graph():
     return _compiled_graph
 
 
+@observe(name="sap_copilot_diagnosis")
 def run_diagnosis(request: IncidentRequest, debug: bool = False) -> DiagnosisResponse:
     initial_state: CopilotState = {
         "description": request.description,
@@ -304,3 +317,7 @@ if __name__ == "__main__":
     )
     result = run_diagnosis(request, debug=args.debug)
     print(result.report_markdown)
+
+    # Processo curto (CLI) - precisa flush manual para garantir que o
+    # trace chegue ao Langfuse antes do processo terminar.
+    get_client().flush()
