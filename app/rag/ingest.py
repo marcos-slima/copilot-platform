@@ -5,6 +5,12 @@ Processa arquivo por arquivo (baixo uso de memoria) e mantem um
 arquivo de estado por target, para poder interromper e retomar sem
 reprocessar o que ja foi indexado.
 
+Correcoes aplicadas apos code review:
+  - ensure_collection() roda 1x por execucao (nao 1x por batch)
+  - antes de (re)indexar um arquivo, os pontos antigos daquele
+    'source' sao deletados primeiro - evita duplicata permanente
+    em reprocessamentos (--reset, ou reruns apos falha parcial)
+
 Uso:
     uv run python -m app.rag.ingest --target incidents
     uv run python -m app.rag.ingest --target reference
@@ -22,12 +28,18 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_ollama import OllamaEmbeddings
 from langchain_text_splitters import MarkdownTextSplitter
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    MatchValue,
+    PointStruct,
+    VectorParams,
+)
 
 from app.config import settings
 
 BASE_DIR = Path(__file__).resolve().parents[2]
-
 EMBEDDING_MODEL = settings.embedding_model
 QDRANT_URL = settings.qdrant_url
 EMBED_BATCH_SIZE = 16  # chunks embedados/gravados por vez, por arquivo
@@ -99,11 +111,28 @@ def ensure_collection(client: QdrantClient, collection_name: str, vector_size: i
         print(f"Collection '{collection_name}' criada.")
 
 
+def probe_vector_size(embeddings: OllamaEmbeddings) -> int:
+    """Faz um embedding minimo so pra descobrir a dimensao do vetor,
+    sem depender de ja ter chunks reais prontos."""
+    return len(embeddings.embed_query("probe"))
+
+
+def delete_existing_points_for_source(client: QdrantClient, collection: str, source: str) -> None:
+    """Remove pontos antigos desse arquivo antes de reindexar - sem
+    isso, reprocessar o mesmo arquivo (--reset ou rerun) acumula
+    duplicata permanente, ja que cada ponto usa um uuid4() novo."""
+    client.delete(
+        collection_name=collection,
+        points_selector=Filter(must=[FieldCondition(key="source", match=MatchValue(value=source))]),
+    )
+
+
 def embed_and_upsert(client, collection, embeddings, chunks: list[str], source: str) -> None:
+    delete_existing_points_for_source(client, collection, source)
+
     for i in range(0, len(chunks), EMBED_BATCH_SIZE):
         batch = chunks[i : i + EMBED_BATCH_SIZE]
         vectors = embeddings.embed_documents(batch)
-        ensure_collection(client, collection, len(vectors[0]))
         points = [
             PointStruct(id=str(uuid4()), vector=v, payload={"source": source, "text": t})
             for v, t in zip(vectors, batch)
@@ -136,6 +165,12 @@ def run_ingest(target: str, limit: int | None, excludes: list[str], reset: bool)
         chunk_size=cfg["chunk_size"], chunk_overlap=cfg["chunk_overlap"]
     )
     client = QdrantClient(url=QDRANT_URL)
+
+    # Collection garantida UMA VEZ por execucao - nao mais dentro do
+    # loop de batch (bug de code review: get_collections() sendo
+    # chamado a cada 16 chunks, por arquivo).
+    vector_size = probe_vector_size(embeddings)
+    ensure_collection(client, cfg["collection"], vector_size)
 
     for idx, path in enumerate(pending, start=1):
         rel = path.relative_to(source_dir)

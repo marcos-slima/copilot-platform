@@ -5,9 +5,14 @@ Fluxo linear:
     connector -> retrieve -> diagnose -> report
 
 Instrumentado com Langfuse: cada node vira um span (@observe), e a
-chamada ao LLM é rastreada via CallbackHandler do LangChain -
-tempo, tokens e custo de cada etapa ficam visiveis em
-http://localhost:3000.
+chamada ao LLM e rastreada via CallbackHandler do LangChain.
+
+Correcoes aplicadas apos code review:
+  - modelo do LLM injetado via state/parametro, sem global mutavel
+  - saida do LLM estruturada via Pydantic (with_structured_output),
+    com fallback pro parsing manual se a validacao estruturada falhar
+  - confidence validado por Field(ge=0,le=1) + clamp defensivo no codigo
+  - logs/payload truncados antes de entrar no prompt (protege contexto)
 
 Uso:
     from app.agent.graph import run_diagnosis
@@ -22,10 +27,12 @@ from typing import TypedDict
 
 from app.config import settings
 
-# Bridge das credenciais do .env (via app.config) para as variaveis
-# de ambiente que o SDK do Langfuse espera - cobre os dois nomes
-# possiveis (LANGFUSE_HOST e LANGFUSE_BASE_URL), para nao depender
-# de qual convencao a versao instalada do SDK usa internamente.
+# Bridge das credenciais do .env para as variaveis de ambiente que o
+# SDK do Langfuse espera - isso e o padrao de configuracao esperado
+# por aquele SDK especifico (le de env var por design), diferente do
+# problema de "global mutavel" do item 1 abaixo (que era estado
+# mutado em RUNTIME por chamadas subsequentes, nao configuracao lida
+# uma vez no import).
 os.environ.setdefault("LANGFUSE_PUBLIC_KEY", settings.langfuse_public_key)
 os.environ.setdefault("LANGFUSE_SECRET_KEY", settings.langfuse_secret_key)
 os.environ.setdefault("LANGFUSE_HOST", settings.langfuse_host)
@@ -35,14 +42,63 @@ from langchain_ollama import ChatOllama
 from langfuse import get_client, observe
 from langfuse.langchain import CallbackHandler
 from langgraph.graph import END, StateGraph
+from pydantic import BaseModel, Field
 
 from app.connectors import ConnectorResult, get_connector
 from app.models import DiagnosisResponse, IncidentRequest
 from app.rag.retriever import retrieve
 
-LLM_MODEL = settings.llm_model
-
 _langfuse_handler = CallbackHandler()
+
+# Limites praticos de contexto enviado ao LLM - bem mais apertados que
+# o max_length do Pydantic (que so protege a API de payload absurdo).
+MAX_LOGS_IN_PROMPT = 2_000
+MAX_PAYLOAD_IN_PROMPT = 2_000
+
+
+class DiagnosisModel(BaseModel):
+    """Schema estruturado da resposta do LLM - usado via
+    with_structured_output, valida o range de confidence na origem.
+
+    IMPORTANTE: as descricoes (description=) nos campos abaixo NAO sao
+    documentacao decorativa - o LangChain injeta esse texto no schema
+    enviado ao LLM (via tool-calling), e e a UNICA orientacao semantica
+    que o modelo recebe sobre o que cada campo significa. Removê-las
+    (ou esquecer de adiciona-las) faz o LLM parar de saber o que
+    preencher, mesmo continuando a raciocinar certo sobre o resto -
+    foi exatamente isso que quebrou matched_source numa rodada anterior."""
+
+    matched_source: str | None = Field(
+        default=None,
+        description=(
+            "Nome EXATO do arquivo do documento de contexto usado como base "
+            "para o diagnostico (ex: 'cpi_http_401.md'), copiado literalmente "
+            "da linha 'fonte=...' do documento mais relevante fornecido. "
+            "Use null se nenhum documento do contexto realmente corresponder "
+            "ao incidente reportado."
+        ),
+    )
+    probable_root_cause: str = Field(
+        description=(
+            "Causa raiz provavel do incidente, em uma ou duas frases, baseada "
+            "EXCLUSIVAMENTE no documento de contexto fornecido e/ou nos dados "
+            "reais do conector, quando disponiveis."
+        )
+    )
+    confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Numero entre 0.0 e 1.0 indicando o quanto o contexto disponivel "
+            "sustenta essa causa raiz. Dados reais do conector aumentam a "
+            "confianca; ausencia de correspondencia clara deve resultar em "
+            "confianca baixa (abaixo de 0.4)."
+        ),
+    )
+    next_steps: list[str] = Field(
+        default_factory=list,
+        description="Lista de proximos passos praticos e concretos para investigar ou resolver o incidente.",
+    )
 
 
 class CopilotState(TypedDict, total=False):
@@ -51,6 +107,7 @@ class CopilotState(TypedDict, total=False):
     payload: str | None
     interface_type: str | None
     identifier: str | None
+    llm_model: str
     connector_data: ConnectorResult | None
     retrieved_context: list[dict]
     diagnosis: dict
@@ -70,8 +127,6 @@ def connector_node(state: CopilotState) -> CopilotState:
 
 
 def _effective_query(state: CopilotState) -> str:
-    """Query usada para o retriever: combina a descricao do usuario
-    com a mensagem real reportada pelo conector, se houver."""
     base = state["description"]
     data = state.get("connector_data")
     if data:
@@ -83,6 +138,12 @@ def _effective_query(state: CopilotState) -> str:
 def retrieve_node(state: CopilotState) -> CopilotState:
     hits = retrieve(_effective_query(state), target="incidents", top_k=3)
     return {"retrieved_context": hits}
+
+
+def _truncate(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"\n[...truncado - {len(text) - limit} caracteres omitidos...]"
 
 
 def _build_diagnosis_prompt(state: CopilotState) -> str:
@@ -119,7 +180,7 @@ def _build_diagnosis_prompt(state: CopilotState) -> str:
             else ""
         )
         connector_block = f"""
-Dados coletados diretamente do sistema SAP (via conector {data.source_system}{' - SIMULADO/MOCK' if data.is_mock else ''}):
+Dados coletados diretamente do sistema SAP (via conector {data.source_system}{" - SIMULADO/MOCK" if data.is_mock else ""}):
   status: {data.status}
   codigo de erro: {data.error_code}
   mensagem: {data.message}
@@ -128,14 +189,14 @@ Dados coletados diretamente do sistema SAP (via conector {data.source_system}{' 
 
     extras = ""
     if state.get("logs"):
-        extras += f"\nLogs:\n{state['logs']}\n"
+        extras += f"\nLogs:\n{_truncate(state['logs'], MAX_LOGS_IN_PROMPT)}\n"
     if state.get("payload"):
-        extras += f"\nPayload:\n{state['payload']}\n"
+        extras += f"\nPayload:\n{_truncate(state['payload'], MAX_PAYLOAD_IN_PROMPT)}\n"
 
     return f"""Voce e um especialista em integracao SAP (OData, IDoc, RFC, CPI).
 
 Incidente reportado:
-{state['description']}
+{state["description"]}
 {extras}{connector_block}
 Contexto recuperado da base de conhecimento de incidentes:
 {context_block}
@@ -148,25 +209,57 @@ documento acima nao corresponder ao sintoma descrito, diga isso e use
 confidence baixa em vez de inventar uma causa raiz combinando temas
 diferentes.
 
-Responda APENAS com um JSON valido no seguinte formato, sem texto
-antes ou depois:
-
-{{
-  "matched_source": "nome do arquivo do documento usado como base (ou null se nenhum)",
-  "probable_root_cause": "causa raiz provavel, em uma ou duas frases",
-  "confidence": 0.0,
-  "next_steps": ["passo 1", "passo 2", "passo 3"]
-}}
+No campo matched_source, copie EXATAMENTE o nome do arquivo indicado
+apos "fonte=" no cabecalho do documento mais relevante mostrado acima
+(exemplo: se o cabecalho diz "fonte=cpi_http_401.md", o valor de
+matched_source deve ser exatamente "cpi_http_401.md", sem alteracoes).
+Se nenhum documento corresponder ao incidente, use null nesse campo.
 
 "confidence" deve ser um numero entre 0.0 e 1.0. Se houver dados reais
 do conector confirmando o diagnostico, a confidence pode ser mais alta
 (o dado do sistema e mais confiavel que so a descricao textual)."""
 
 
+def _apply_confidence_guardrails(diagnosis: dict, state: CopilotState) -> dict:
+    """Guardrails deterministicos - nao confia so na autoavaliacao do
+    LLM nem so na validacao de schema."""
+    diagnosis["confidence"] = max(0.0, min(1.0, float(diagnosis.get("confidence", 0.0))))
+
+    data = state.get("connector_data")
+    if data and data.is_fallback:
+        original = diagnosis["confidence"]
+        capped = min(original, 0.4)
+        if capped < original:
+            diagnosis["confidence"] = capped
+            diagnosis["probable_root_cause"] = (
+                f"[confianca limitada - identificador nao reconhecido pelo sistema] "
+                f"{diagnosis.get('probable_root_cause', '')}"
+            )
+
+    if not state.get("retrieved_context") and not data:
+        original = diagnosis["confidence"]
+        capped = min(original, 0.3)
+        if capped < original:
+            diagnosis["confidence"] = capped
+            diagnosis["matched_source"] = None
+            diagnosis["probable_root_cause"] = (
+                f"[confianca limitada - nenhum documento relevante encontrado] "
+                f"{diagnosis.get('probable_root_cause', '')}"
+            )
+
+    return diagnosis
+
+
 @observe(name="diagnose")
 def diagnose_node(state: CopilotState) -> CopilotState:
-    llm = ChatOllama(model=LLM_MODEL, temperature=0.0, seed=42)
+    model_name = state.get("llm_model") or settings.llm_model
+    llm = ChatOllama(model=model_name, temperature=0.0, seed=42)
     prompt = _build_diagnosis_prompt(state)
+
+    structured_llm = llm.with_structured_output(DiagnosisModel, include_raw=True)
+    result = structured_llm.invoke(prompt, config={"callbacks": [_langfuse_handler]})
+    raw_message = result["raw"]
+    parsed: DiagnosisModel | None = result["parsed"]
 
     if state.get("debug"):
         print("=" * 60)
@@ -174,55 +267,40 @@ def diagnose_node(state: CopilotState) -> CopilotState:
         print("=" * 60)
         print(prompt)
         print("=" * 60)
-
-    response = llm.invoke(prompt, config={"callbacks": [_langfuse_handler]})
-    raw = response.content.strip()
-
-    if state.get("debug"):
         print("RESPOSTA BRUTA DO LLM:")
         print("=" * 60)
-        print(raw)
+        print(raw_message.content if raw_message else "(sem conteudo bruto)")
         print("=" * 60)
 
-    if raw.startswith("```"):
-        raw = raw.strip("`")
-        raw = raw.removeprefix("json")
-        raw = raw.strip()
+    if parsed is not None:
+        diagnosis = parsed.model_dump()
+    else:
+        raw = (raw_message.content or "").strip() if raw_message else ""
+        if raw.startswith("```"):
+            raw = raw.strip("`")
+            raw = raw.removeprefix("json")
+            raw = raw.strip()
+        try:
+            diagnosis = json.loads(raw)
+        except json.JSONDecodeError:
+            diagnosis = {
+                "probable_root_cause": "Nao foi possivel estruturar a resposta do modelo.",
+                "confidence": 0.0,
+                "next_steps": [f"Resposta bruta do modelo: {raw[:500]}"],
+            }
 
-    try:
-        diagnosis = json.loads(raw)
-    except json.JSONDecodeError:
-        diagnosis = {
-            "probable_root_cause": "Nao foi possivel estruturar a resposta do modelo.",
-            "confidence": 0.0,
-            "next_steps": [f"Resposta bruta do modelo: {raw[:500]}"],
-        }
-
-    # Guardrail deterministico: nao confia so na autoavaliacao do LLM.
-    data = state.get("connector_data")
-    if data and data.is_fallback:
-        original_confidence = float(diagnosis.get("confidence", 0.0))
-        capped = min(original_confidence, 0.4)
-        if capped < original_confidence:
-            diagnosis["confidence"] = capped
-            diagnosis["probable_root_cause"] = (
-                f"[confianca limitada - identificador nao reconhecido pelo sistema] "
-                f"{diagnosis.get('probable_root_cause', '')}"
-            )
-
+    diagnosis = _apply_confidence_guardrails(diagnosis, state)
     return {"diagnosis": diagnosis}
 
 
 @observe(name="report")
 def report_node(state: CopilotState) -> CopilotState:
     diagnosis = state.get("diagnosis", {})
-    sources = (
-        ", ".join(sorted({h["source"] for h in state.get("retrieved_context", [])}))
-        or "nenhuma fonte relevante encontrada"
+    sources = ", ".join(sorted({h["source"] for h in state.get("retrieved_context", [])})) or (
+        "nenhuma fonte relevante encontrada"
     )
 
     next_steps_md = "\n".join(f"- {step}" for step in diagnosis.get("next_steps", []))
-
     matched = diagnosis.get("matched_source") or "nenhum documento especifico identificado"
 
     connector_line = ""
@@ -236,16 +314,16 @@ def report_node(state: CopilotState) -> CopilotState:
 
     report = f"""## Diagnostico do Incidente
 
-**Descricao reportada:** {state['description']}
+**Descricao reportada:** {state["description"]}
 {connector_line}
-**Causa raiz provavel:** {diagnosis.get('probable_root_cause', 'N/A')}
+**Causa raiz provavel:** {diagnosis.get("probable_root_cause", "N/A")}
 
-**Confianca:** {diagnosis.get('confidence', 0.0):.0%}
+**Confianca:** {diagnosis.get("confidence", 0.0):.0%}
 
 **Documento usado como base:** {matched}
 
 **Proximos passos:**
-{next_steps_md if next_steps_md else '- (nenhum passo sugerido)'}
+{next_steps_md if next_steps_md else "- (nenhum passo sugerido)"}
 
 **Fontes recuperadas (candidatas):** {sources}
 """
@@ -279,13 +357,24 @@ def get_graph():
 
 
 @observe(name="sap_copilot_diagnosis")
-def run_diagnosis(request: IncidentRequest, debug: bool = False) -> DiagnosisResponse:
+def run_diagnosis(
+    request: IncidentRequest,
+    debug: bool = False,
+    llm_model: str | None = None,
+) -> DiagnosisResponse:
+    """Executa o grafo completo para um incidente.
+
+    llm_model: override opcional do modelo (ex: usado pelo
+    promptfoo_provider.py para comparacao de modelos) - passado via
+    parametro/state, nao mais via mutacao de global de modulo.
+    """
     initial_state: CopilotState = {
         "description": request.description,
         "logs": request.logs,
         "payload": request.payload,
         "interface_type": request.interface_type,
         "identifier": request.identifier,
+        "llm_model": llm_model or settings.llm_model,
         "debug": debug,
     }
     final_state = get_graph().invoke(initial_state)
@@ -307,11 +396,8 @@ if __name__ == "__main__":
     parser.add_argument("description", nargs="*", default=[])
     parser.add_argument("--interface", choices=["odata", "rfc"], default=None)
     parser.add_argument("--id", dest="identifier", default=None)
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Mostra o prompt exato enviado ao LLM e a resposta bruta",
-    )
+    parser.add_argument("--model", dest="llm_model", default=None, help="Override do modelo LLM")
+    parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
 
     description = (
@@ -322,9 +408,7 @@ if __name__ == "__main__":
         interface_type=args.interface,
         identifier=args.identifier,
     )
-    result = run_diagnosis(request, debug=args.debug)
+    result = run_diagnosis(request, debug=args.debug, llm_model=args.llm_model)
     print(result.report_markdown)
 
-    # Processo curto (CLI) - precisa flush manual para garantir que o
-    # trace chegue ao Langfuse antes do processo terminar.
     get_client().flush()
