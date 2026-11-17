@@ -1,0 +1,52 @@
+{
+  "architecture_platform": {
+    "name": "pytest",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "tests": "47",
+    "time": "4.923",
+    "timestamp": "2026-11-17T13:12:57.562569-03:00",
+    "hostname": "marcos-lima-NucBox-EVO-X2",
+    "local_artifact": "/tmp/platform-architecture-recovered.xml",
+    "sha256": "0711000108e426d148456cb1036431d2b6bff7568b7583fb9e9439c20fa4aca1"
+  },
+  "architecture_iic_snapshot": {
+    "name": "pytest",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "tests": "47",
+    "time": "7.313",
+    "timestamp": "2026-11-17T13:15:14.276622-03:00",
+    "hostname": "marcos-lima-NucBox-EVO-X2",
+    "local_artifact": "/tmp/iic-snapshot-architecture-recovered.xml",
+    "sha256": "3b186431f9730ec57d5197de37cd69458dc5797019c53dba372eb2e7653542ed"
+  },
+  "unit_platform": {
+    "name": "pytest",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "22",
+    "tests": "1960",
+    "time": "142.563",
+    "timestamp": "2026-11-17T13:13:27.275225-03:00",
+    "hostname": "marcos-lima-NucBox-EVO-X2",
+    "local_artifact": "/tmp/platform-unit-recovered.xml",
+    "sha256": "a0b02d91d97c6f592e11ec009cc99440debb2dbacbc5adf991488e2689d59e75"
+  },
+  "coverage_percent": 82.67701805256758,
+  "model": {
+    "platform_source": "/home/marcos-lima/MyProjects/GitHub/copilot-platform/packages/core/src/app/__init__.py",
+    "baseline_model": "qwen3.6:35b-a3b",
+    "baseline_generated_at": "2026-10-13T17:56:04.501Z",
+    "iic_kyma_declared_model": "gpt-4o-mini",
+    "iic_kyma_provider": "openai",
+    "runtime_deployment_verified": false,
+    "cloud_evaluation": "pending; no new inference or baseline written"
+  },
+  "source_commit": "8da49972b532619be0beae027d64a764d0b461b6",
+  "source_dirty": true,
+  "date": "2026-11-17",
+  "remote_ci_verified": false
+}

@@ -1,6 +1,6 @@
 [component]
 name = "copilot-operations"
-version = "1.0.0"
+version = "1.0.1"
 
 [compatibility]
 tested_core_versions = ["1.4.1"]

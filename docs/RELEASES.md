@@ -31,3 +31,12 @@ evitar publicação acidental em registro.
 
 Migrações não são aplicadas pelo build. Não há deploy de produção, inferência
 LLM real ou homologação fiscal implícitos na publicação de uma biblioteca.
+
+## Operações 1.0.1
+
+Patch preparado para qualificação por artefato: valida migrations e dashboards
+extraídos com wheel instalado e nos dois consumidores, preservando evidências
+de testes. O manual do bundle descreve esse alcance. Não altera IDs ou conteúdo
+das migrations, prompts ou implementação do core/UI. Mantém compatibilidade
+com core 1.4.1. A publicação ocorre somente após CI aprovada na main; esta nota
+não comprova que a tag operations/v1.0.1 já tenha sido publicada.

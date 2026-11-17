@@ -528,6 +528,11 @@
       "path": "packages/core-ui/README.md",
       "status": "current",
       "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/TEST_EVIDENCE_2026-11-17.md",
+      "status": "historical",
+      "owner": "copilot-platform"
     }
   ]
 }
