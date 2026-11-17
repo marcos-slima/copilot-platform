@@ -43,8 +43,8 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: artifact_ci
-          POSTGRES_PASSWORD: artifact_ci
+          POSTGRES_USER: artifact_test_ci
+          POSTGRES_PASSWORD: artifact_test_ci
           POSTGRES_DB: postgres
         ports:
         - 5432:5432
@@ -74,7 +74,7 @@ jobs:
     - run: uv run python scripts/build_shared_distribution.py --out-dir dist/shared
     - name: Validate extracted operations with installed candidate wheel
       env:
-        OPERATIONS_TEST_DATABASE_URL: postgresql://artifact_ci:artifact_ci@localhost:5432/postgres
+        OPERATIONS_TEST_DATABASE_URL: postgresql://artifact_test_ci:artifact_test_ci@localhost:5432/postgres
       run: uv run python scripts/verify_shared_distribution.py dist/shared --postgres
     - uses: actions/upload-artifact@v4
       with:
@@ -219,15 +219,15 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: consumer_ci
-          POSTGRES_PASSWORD: consumer_ci
+          POSTGRES_USER: consumer_test_ci
+          POSTGRES_PASSWORD: consumer_test_ci
           POSTGRES_DB: postgres
         ports:
         - 5432:5432
         options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s
           --health-retries 10
     env:
-      OPERATIONS_TEST_DATABASE_URL: postgresql://consumer_ci:consumer_ci@localhost:5432/postgres
+      OPERATIONS_TEST_DATABASE_URL: postgresql://consumer_test_ci:consumer_test_ci@localhost:5432/postgres
     needs:
     - distribution
     timeout-minutes: 20
@@ -260,15 +260,15 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: consumer_ci
-          POSTGRES_PASSWORD: consumer_ci
+          POSTGRES_USER: consumer_test_ci
+          POSTGRES_PASSWORD: consumer_test_ci
           POSTGRES_DB: postgres
         ports:
         - 5432:5432
         options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s
           --health-retries 10
     env:
-      OPERATIONS_TEST_DATABASE_URL: postgresql://consumer_ci:consumer_ci@localhost:5432/postgres
+      OPERATIONS_TEST_DATABASE_URL: postgresql://consumer_test_ci:consumer_test_ci@localhost:5432/postgres
     needs:
     - distribution
     timeout-minutes: 20
