@@ -1,3 +1,14 @@
+> Escopo atual DA-96: markup, referências de código e variáveis dos guias operacionais
+> seguem architecture/repository.toml. A lista é explícita e ampliada quando novos guias
+> passam a ser mantidos. A existência de documentos históricos não implica auditoria
+> de toda a prosa. O dropdown do IIC é testado no consumidor; os gates e testes
+> internos do core continuam aqui. Detalhes: [desenvolvimento](DEVELOPMENT.md).
+
+> Referência compartilhada de Copilot Platform. Para instalação e propriedade
+> atuais, consulte [o índice](README.md) e [a plataforma](PLATFORM.md).
+> DAs e evidências mantêm sua cronologia. Seções de UI/Compose/Kyma herdadas
+> descrevem o antigo monorepo; use os guias do produto para implantação atual.
+
 # Quality Gates (DA-51)
 
 A suite de testes responde "o código faz o que promete?". Os gates respondem

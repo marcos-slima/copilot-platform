@@ -2,14 +2,14 @@
 
 O grafo permitido é produto → SDK/core e shell → core-ui. O core não importa
 produto, e um produto não importa outro. O gate de imports aplica as regras
-em `architecture/boundaries.toml` da raiz do monorepo.
+em `architecture/boundaries.toml` da raiz da plataforma.
 
 | Superfície | Versão | Negociação |
 |---|---|---|
 | HTTP | 1.0 | Header `X-Core-Contract-Version` no pedido e resposta; catálogo publica `contract_version` |
 | Plugin | 1.1 | Atributo `contract_version`; core verifica antes de executar o plugin |
 | SDK Python | 1.0 | `app.sdk.SDK_CONTRACT_VERSION` e `compatible_version()` |
-| Componentes UI | 0.1.0 | Versão de `@copilot/core-ui`, imports somente pelo índice e styles.css |
+| Componentes UI | 0.1.1 | Versão de `@copilot/core-ui`, imports somente pelo índice e styles.css |
 
 HTTP, SDK e plugin usam major.minor: major igual e minor requerido menor ou
 igual ao suportado. Versões inválidas ou incompatíveis são recusadas. Mudanças
@@ -42,14 +42,12 @@ Não houve alteração de regras fiscais ou prompts. Esse versionamento cobre
 os payloads e protocolos existentes; não concede compatibilidade automática a
 endpoints futuros nem elimina a necessidade dos testes de contrato.
 
-## Plano de separação
+## Distribuição após a separação
 
-O core já está em `packages/core`, com manifest e wheel próprios. Os produtos
-já declaram `copilot-core` como dependência; no monorepo uv resolve por workspace.
-Para outro repositório, remove-se a fonte workspace do manifest e fornece-se o
-wheel correspondente. O DF-e dispõe de alvo Docker e CI específicos, descritos em
-`packages/dfe/docs/DEPLOY.md` na raiz do monorepo. Nenhuma publicação em
-registro ou deploy é executado pelos scripts locais.
+Core e core-ui são mantidos em Copilot Platform; IIC e FISC são consumidores
+externos. Fontes workspace existem somente na plataforma para desenvolvimento.
+Produtos usam URL/versionamento/hashes e seus locks, sem fontes do monorepo.
+Consulte [distribuição](DISTRIBUTION.md) e [publicação](RELEASE.md).
 
 A sessão web aceita `SESSION_COOKIE_NAME` para separar instâncias no mesmo
 host. O valor padrão histórico permanece para clientes existentes; os produtos

@@ -1,17 +1,8 @@
-# CLAUDE.md — Integration Incident Copilot
+# CLAUDE.md — Copilot Platform
 
-Contexto de trabalho para o Claude Code CLI. Leia antes de qualquer edição.
-
----
-
-## O que é este projeto
-
-Assistente de IA para diagnóstico de incidentes de integração empresarial.
-Multi-vendor por design: SAP (OData, RFC, CPI, BTP) é um conector entre
-vários — ServiceNow, Salesforce, Workday, Ariba, CAP, APIManagement.
-Produto de Marcos Lima (SAP Architect → AI Architect).
-
----
+Leia AGENTS.md e [o índice](docs/README.md) antes de editar.
+Este workspace mantém bibliotecas e operações compartilhadas. IIC e FISC têm
+shells, UI e implantação próprios. Não há Compose de produto nesta raiz.
 
 ## Stack
 
@@ -20,7 +11,7 @@ Produto de Marcos Lima (SAP Architect → AI Architect).
 | API | FastAPI + Pydantic |
 | Orquestração | LangGraph (`packages/core/src/app/agent/graph.py`) |
 | LLM | Ollama local (default) → OpenAI / Azure como fallback (DA-20/26) |
-| Modelo canônico | `qwen3.6:35b-a3b` (35B MoE, 128k ctx) — default em `packages/core/src/app/config.py`, `.env.example`, `docker-compose.yml` e no promptfoo (troca em 2026-10-13; o anterior, `qwen3-coder-next:latest`, segue registrado em DA-4/8 + DA-12 como histórico). **Ressalva (validação 2026-10-07, M-21):** casos resolvidos pelo rule engine não medem o LLM (`metadata.path` no YAML); baseline oficial gravado em `data/eval/promptfoo_baseline.json` (17/17 total; 12/12 LLM-only) |
+| Modelo canônico | `qwen3.6:35b-a3b` (35B MoE, 128k ctx) — default em `packages/core/src/app/config.py`, `.env.example`, `Compose dos produtos` e no promptfoo (troca em 2026-10-13; o anterior, `qwen3-coder-next:latest`, segue registrado em DA-4/8 + DA-12 como histórico). **Ressalva (validação 2026-10-07, M-21):** casos resolvidos pelo rule engine não medem o LLM (`metadata.path` no YAML); baseline oficial gravado em `data/eval/promptfoo_baseline.json` (17/17 total; 12/12 LLM-only) |
 | RAG | LangChain + Qdrant (hybrid dense+sparse BM25, fusão RRF) |
 | Reranker | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (benchmark DA-29; não usar ms-marco-L6) |
 | GraphRAG | Neo4j (`packages/core/src/app/rag/graph_store.py`), opt-in via `GRAPH_RAG_ENABLED=true` |
@@ -31,225 +22,23 @@ Produto de Marcos Lima (SAP Architect → AI Architect).
 
 ---
 
-## Ambiente local
+## Ambiente e estrutura atuais
 
-```bash
-# Ativar venv em qualquer shell
-PATH="$PWD/.venv/bin:$PATH"
+Siga [desenvolvimento](docs/DEVELOPMENT.md) para instalar o workspace e rodar
+gate junto com suíte e testes UI. Use uv, não pip/poetry diretamente.
 
-# Rodar testes unitários (sem infra)
-uv run pytest tests/ -m "not integration" -v
+| Caminho | Responsabilidade |
+|---|---|
+| packages/core/src/app | Core Python; produtos importam app.sdk |
+| packages/core-ui | UI comum sem shells de produto |
+| operations/component.toml | Versão e combinação testada das operações |
+| alembic e deploy/grafana/dashboards | Recursos operacionais canônicos |
+| tests e scripts | Testes, gates, build, verificação e promoção |
+| docs/history | Guias anteriores e evidências datadas |
 
-# Rodar testes de integração (precisa Ollama + Qdrant rodando)
-uv run pytest tests/ -v
-
-# Servidor de desenvolvimento
-uv run uvicorn app.main:app --reload
-
-# Ingestão de documentos
-uv run python -m app.rag.ingest --target incidents --reset
-```
-
-**Infraestrutura local** — tudo vem do `docker-compose.yml` **deste repo**.
-Não há diretório de infra externo; um stack pessoal que existiu foi
-removido e o compose passou a ser a única fonte:
-
-```bash
-docker compose --profile observability up -d qdrant postgres grafana redis
-docker compose --profile graphrag up -d neo4j      # opt-in
-```
-
-- Qdrant → `localhost:6333` (ou `:6335` se `QDRANT_HOST_PORT` no `.env`)
-- Postgres → `localhost:5432` (perfil `observability`)
-- Neo4j → `localhost:7474` (perfil `graphrag`, opt-in)
-- Grafana → `localhost:3002` (perfil `observability`)
-- Ollama → `localhost:11434` — **nativo**, `/usr/local/bin/ollama`, não em
-  container. O serviço `ollama` do compose existe (perfil
-  `container-ollama`) mas é opt-in; o compose aponta para o host via
-  `host.docker.internal`.
-
-> **`.env` é por modo, e o erro é fácil.** Os dois modos usam o mesmo
-> compose; muda só onde o processo Python roda. No modo **nativo** o `.env`
-> precisa de hosts de loopback — `DATABASE_URL=…@127.0.0.1:5432/iic` — e
-> `postgres` **não resolve na máquina** (é nome de serviço na rede do
-> compose). No modo **container** é o inverso: o compose injeta `postgres`,
-> `qdrant` e `neo4j` por default em `x-common-env`, então apontar o `.env`
-> para `127.0.0.1` quebra o container. Para apontar o container a um banco
-> externo, use `CONTAINER_DATABASE_URL` / `CONTAINER_NEO4J_URI`, que não
-> colidem com as variáveis do modo nativo.
->
-> O `NEO4J_URI`/`NEO4J_USER`/`NEO4J_PASSWORD` faltavam do `x-common-env`
-> até este estado: o serviço `neo4j` existia no perfil `graphrag` mas a API
-> nunca recebia as credenciais, então o GraphRAG não tinha como alcançar o
-> banco nem no modo container.
->
-> `NEO4J_AUTH` do Neo4j só vale na **primeira inicialização** do volume.
-> Trocar a senha no `.env` depois não troca a senha do banco — precisa
-> remover o volume `integration-incident-copilot_neo4j_data`. Sem
-> `NEO4J_PASSWORD` no `.env`, o serviço sobe com o placeholder
-> `neo4j/REQUIRED_SET_IN_ENV` e falha em `verify_connectivity()`.
->
-> **`GRAPH_RAG_ENABLED=false` é o default** (`packages/core/src/app/config.py`) e é a flag
-> real — o `CLAUDE.md` antigo citava uma flag USE_GRAPH_RAG, que não existe.
->
-> **Dois Qdrant podem coexistir na mesma máquina.** O compose deste repo
-> publica em `${QDRANT_HOST_PORT:-6333}`. Se outro stack (ou um Qdrant
-> standalone) já usar a `6333`, defina `QDRANT_HOST_PORT=6335` — é o que
-> o `.env` local faz, e é por isso que `scripts/debug_matched_source.py`
-> existia com `6335` fixado. O acervo grande (`sap_reference_library`) fica no Qdrant do outro stack, não neste repo;
-> o tamanho real fica em `data/index_manifest.json` (gerado pelo ingest, validação 2026-10-07, M-23) —
-> os números antigos (~767k, 28.962, 100.805) eram incompatíveis entre si.
->
-> armadilha correlata: `.ingest_state_reference.json` em `data/` é **um arquivo por
-> target, sem URL dentro** (chave = `hash:filename`, `packages/core/src/app/rag/ingest.py:167`).
-> Ele marca "já processado" sem registrar *onde*. Rodar a ingestão contra
-> um Qdrant e depois contra outro faz o segundo run **pular tudo** e o
-> destino ficar sem os 22 GB esperados — sem erro. Trocar de destino exige
-> `--reset-state` **e** gravar o estado contra a URL pretendida.
-
-### MCP para agentes de IA (DA-19)
-
-O servidor MCP é **Streamable HTTP**, montado em `/mcp` dentro do app
-FastAPI — não é um processo stdio separado. Ele exige o mesmo `X-API-Key`
-de `/diagnose` (DA-18) via `RequireApiKeyMiddleware`.
-
-Consequência prática: `settings.api_key` é **gerada aleatoriamente no
-startup** quando está vazia (`packages/core/src/app/main.py::_ensure_api_keys_configured`).
-Para um cliente MCP conseguir autenticar, `API_KEY` precisa estar
-**fixada no `.env`** (ver `.env.example:120`).
-
-Configuração por ferramenta:
-
-| Ferramenta | Arquivo | Dialeto |
-|---|---|---|
-| Claude Code | `.mcp.json` | `type: http` + `${API_KEY}` |
-| OpenCode | `opencode.json` | `type: remote` + `{env:API_KEY}` |
-| Codex | `~/.codex/config.toml` | `[mcp_servers.copilot-mcp]` (global) |
-
-Depois de editar qualquer um desses, **reinicie** a ferramenta — config MCP
-não é hot-reload.
-
-Requisito: `uv run uvicorn app.main:app` no ar, senão o cliente falha ao
-conectar.
-
----
-
-## Regras de commit (OBRIGATÓRIO)
-
-```bash
-# Pre-commit hooks: ruff, ruff-format, gitleaks, trim-whitespace
-# O PATH precisa incluir o .venv para o hook encontrar ruff:
-PATH="$PWD/.venv/bin:$PATH" git commit -m "..."
-```
-
-Se o hook rodar ruff e reformatar arquivos → `git add` novamente + re-commit.
-
-**Nunca usar** valores com prefixo `sk-` em testes (dispara gitleaks).
-**Nunca usar** nomes de campo como `api_key` ou `generic-api-key` em valores de teste.
-
----
-
-## Estrutura de pastas relevantes
-
-> **Monorepo (DA-94/DA-95).** `packages/core/src/app/` é o core compartilhado **e** o backend
-> do IIC. O produto **DF-e Copilot** fica em `packages/dfe/` (pacote
-> `dfe_copilot`, shell de UI em `packages/dfe/frontend`, testes e docs
-> próprios) e só toca o core por `app.sdk` (e pelo protocolo
-> `packages/core/src/app/agent/domain_plugins.py::DomainPlugin`). UI: npm workspaces na raiz,
-> com `packages/core-ui` (`@copilot/core-ui`, sem produto), `frontend/` (shell
-> do IIC) e `packages/dfe/frontend` (shell do DF-e). As fronteiras ficam em
-> `architecture/boundaries.toml` e são verificadas pelo gate `import_boundaries`.
-> Não use `npm` dentro de um shell isolado: rode `npm ci` na raiz.
-> Documentação do DF-e: `packages/dfe/README.md`.
-
-```
-packages/core/src/app/
-  agent/
-    graph.py        # Grafo LangGraph + run_diagnosis() — ponto de entrada
-    prompts.py      # DA-53: artefato de prompt (version+digest); fonte
-                    # única de persona, template e instrução de saída
-    nodes.py        # Todos os nodes: connector, retrieve, diagnose, report
-                    # + _assemble_evidence(), _apply_confidence_guardrails()
-    rules.py        # DA-33: Rule Engine determinístico (22 regras: KNOWN_ERROR_RULES)
-    escalation.py   # DA-44: sinal determinístico de escalonamento (3 tiers)
-    supervisor.py   # DA-22: classifica domínio (sap/saas/generic) sem LLM
-    state.py        # CopilotState (TypedDict)
-  llm/
-    factory.py      # DA-20: Hybrid Inference (Ollama → cloud fallback)
-    gateway.py      # DA-26: AI Gateway (policy + circuit breaker + budget)
-  admin/            # DA-46/47/48/49/50: registro de modelos + credenciais
-                    # Fernet + metering real + catálogo de sistemas
-                    # integrados (DA-49) + correlação de incidentes
-                    # (correlation.py, DA-50); UI Jinja2 em /admin
-                    # (models, usage, systems, incidents) + API /admin/api/*
-  sdk/              # DA-95: superficie publica do core para produtos
-                    # (__init__.py) + apoio de teste (testing.py)
-  mcp/
-    server.py       # DA-19: servidor MCP
-    policy.py       # DA-27: Capability Registry (FAIL-CLOSED por default)
-    skill_registry.py # DA-63: lê packages/core/data/skills/*.yaml (parser único de policy,
-                    # supervisor e gate connector_reachable)
-  contracts/        # DA-52: drift de contrato SAP
-    model.py        # Contrato normalizado + fingerprint canônico
-    odata.py        # Parser EDMX ($metadata) → contrato
-    diff.py         # Severidade fechada: breaking/additive/cosmetic
-    baseline.py     # ORM SystemContract (append-only, sem FK)
-    observe.py      # probe → diff → baseline → CloudEvent
-  rag/
-    retriever.py    # RAG híbrido + reranker
-    graph_store.py  # GraphRAG (Neo4j)
-    ingest.py       # Indexação de documentos
-  evaluation/
-    gates.py        # DA-51: checks determinísticos de qualidade (sem LLM/infra)
-    coverage.py     # DA-58: cálculo do mapa produto SAP × mecanismo
-                    # (3 níveis; `unknown` ≠ `none`) — sem import de `app.*`
-                    # pesado, para o gate continuar leve
-  events/
-    consumer.py     # DA-23: webhook CloudEvents → run_diagnosis()
-  a2a/              # DA-14: Agent2Agent (JSON-RPC 2.0)
-  auth.py           # DA-54: sessão da UI (login/cookie HMAC + logout/
-                    # session) e DA-55: rotas públicas de ativação
-                    # (/auth/verify/email, /auth/verify/phone); o login
-                    # verifica .env (bootstrap) → banco (web_users ativos)
-  connectors/       # 10 conectores: odata, rfc, servicenow, salesforce,
-                    # workday, ariba, successfactors, cap, apimanagement,
-                    # po (DA-56, SAP PO/PI on-premise)
-  webusers.py       # DA-55: domínio de usuários da UI — token de e-mail
-                    # (HMAC, namespace próprio), código de telefone (só o
-                    # hash guardado, único-uso), status pending_email →
-                    # pending_phone → active, entrega out-of-band
-                    # (adaptador deliver_email/deliver_sms para SMTP/SMS)
-  config.py         # Pydantic Settings — fonte única de verdade para config
-  main.py           # FastAPI app, rotas, lifespan
-
-tests/              # suite unitária + integração; o número exato muda a cada
-                    # commit, então não é declarado aqui — rode
-                    # `uv run pytest tests/ -m "not integration"` para o total atual.
-                    # 9 deles são e2e da DA-52 e só rodam com
-                    # IIC_TEST_DATABASE_URL + Postgres (job CI
-                    # migrations_and_dashboards)
-data/
-  sample_docs/      # Base de conhecimento RAG (arquivos .md)
-  eval/             # Dataset de avaliação RAG + resultados benchmark
-                    # + baseline do promptfoo (DA-51), versionados
-  sap_products.yaml      # DA-58: 27 linhas × 9 mecanismos (dado do mapa)
-  connector_coverage.yaml # DA-58: conector -> produto + mecanismos exercitados
-  skills/           # DA-63: skills declarativas (contrato de capability +
-                    # interface_type -> domínio); copiado para a imagem
-scripts/            # benchmark_rerankers.py, generate_reports.py,
-                    # validate_dashboards.py (45 queries Grafana vs Postgres real),
-                    # coverage_map.py (DA-58: gera docs/COVERAGE_MAP.md),
-                    # graph_diagram.py (gera o grafo Mermaid de ARCHITECTURE.md e README.md),
-                    # quality_gate.py (DA-51)
-docs/               # índice em docs/README.md; ARCHITECTURE.md, DECISOES_DE_ARQUITETURA.md, GETTING_STARTED.md,
-                    # TUTORIAL_ARQUETURA_DEBUG.md, TROUBLESHOOTING.md,
-                    # QUALITY_GATES.md, COVERAGE_MAP.md (DA-58, GERADO),
-                    # CASOS_DE_USO.md (cenários medidos por testes), CONNECTORS.md
-.vscode/
-  launch.json       # 14 configurações de debug prontas (graph, pytest, uvicorn)
-```
-
----
+Não alterar prompts/digests sem medição/re-baseline real. Preservar invariantes
+e não versionar segredos. As DA-94/95 registram a evolução do monorepo;
+a DA-96 define a propriedade atual. Não recriar os produtos neste workspace.
 
 ## Decisões de Arquitetura (DAs) — resumo
 
@@ -450,18 +239,9 @@ docs/               # índice em docs/README.md; ARCHITECTURE.md, DECISOES_DE_AR
    (seção `## Índice`). Os dois gates reprovam o build se algum dos dois faltar
 5. Commitar com prefixo `feat(DA-N):` no commit message
 
-## Documentação bilíngue
+## Documentação e idiomas
 
-PT em `docs/` é a fonte; EN em `docs/en/` acompanha; alterações entram primeiro no PT; cabeçalho de cada arquivo EN registra o commit-fonte.
-
----
-
-## Debug rápido no VS Code
-
-`.vscode/launch.json` tem 14 configurações prontas:
-- **Debug: graph.py (caso IDoc travado)** — exercita RFC + regra 51
-- **Debug: FastAPI (uvicorn)** — servidor com breakpoints
-- **Debug: pytest (tudo)** / **(só unitários, rápido)**
-- **Debug: graph.py (texto livre)** — prompt interativo
-
-Ver também: `docs/TUTORIAL_ARQUITETURA_DEBUG.md`
+Guias atuais: [índice](docs/README.md). Português é mantido primeiro; traduções
+anteriores têm status histórico explícito. Não declarar tradução completa sem
+atualizar o conteúdo. As antigas instruções do agente estão
+[arquivadas](docs/history/monorepo/CLAUDE.md).

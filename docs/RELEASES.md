@@ -6,8 +6,8 @@
 | @copilot/core-ui | 0.1.1 | core-ui/v0.1.1 | tarball npm com ESM/tipos/CSS |
 | copilot-operations | 1.0.0 | operations/v1.0.0 | Alembic, dashboards e validador |
 
-Esses números são fontes declaradas; disponibilidade efetiva depende da
-publicação da respectiva release. Não existe versão única da plataforma.
+As três releases iniciais estão [publicadas](https://github.com/marcos-slima/copilot-platform/releases).
+Para novas versões, manifest não comprova publicação. Não existe versão única da plataforma.
 Operações têm matriz explícita de core testado; atualizar compatibilidade
 também exige validação, sem renumerar revisões do banco.
 

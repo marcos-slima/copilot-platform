@@ -1,0 +1,533 @@
+{
+  "architecture": "independent-products-shared-platform",
+  "date": "2026-11-17",
+  "source_commit": "e8bb9e2cdca2b84e98e7abf63d73112eac947464",
+  "statuses": {
+    "current": "maintained operational/product guide",
+    "reference": "design/decision reference; dated sections retain original scope",
+    "historical": "frozen evidence; not current setup",
+    "redirect": "compatibility URL to current owner or guide"
+  },
+  "documents": [
+    {
+      "path": "AGENTS.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "CLAUDE.md",
+      "status": "reference",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "README.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "status": "reference",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/AVALIACAO_ARQUITETURAL_PRODUTO_AI.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/AVALIACAO_MODELOS_LOCAIS.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/CASOS_DE_USO.md",
+      "status": "reference",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/CI_PRODUTOS.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/CONNECTORS.md",
+      "status": "reference",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/COVERAGE_MAP.md",
+      "status": "reference",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/CUSTOMIZACAO.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/DECISOES_DE_ARQUITETURA.md",
+      "status": "reference",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/DEPLOY.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/DEPLOYMENT.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/DEVELOPMENT.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/DIVIDAS_TECNICAS.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/DOCUMENTATION_POLICY.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/EVIDENCIA_K3D_2026-10-18.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/GETTING_STARTED.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/GLOSSARY.md",
+      "status": "reference",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/GOVERNANCA.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/GRM_AUDIT.md",
+      "status": "reference",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/GRM_CHECKLIST.md",
+      "status": "reference",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/GRM_MAPPING.md",
+      "status": "reference",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/MANUAL.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/OWNERSHIP.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/PLATFORM.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/QUALITY_GATES.md",
+      "status": "reference",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/RATE_LIMITING.md",
+      "status": "reference",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/README.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/RELEASES.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/RERANKER_BENCHMARK.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/ROADMAP.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/ROADMAP_SEMANTIC_AI.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/ROTEIRO_DE_AVALIACAO.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/SECURITY.md",
+      "status": "reference",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/TCO_SAP_AI_CORE_VS_SELF_HOSTED.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/TRACEABILITY.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/TROUBLESHOOTING.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/TUTORIAL_ACESSIBILIDADE_MULTIVENDOR.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/TUTORIAL_ARQUITETURA_DEBUG.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/TUTORIAL_FASE9_MULTIVENDOR_GRAPHRAG_A2A.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/TUTORIAL_K3D_KUBERNETES_LOCAL.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/USER_GUIDE.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/dossier/05-solution-architecture.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/en/ARCHITECTURE.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/en/ARCHITECTURE_DECISIONS.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/en/CONNECTORS.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/en/DEPLOY.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/en/GETTING_STARTED.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/en/GLOSSARY.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/en/QUALITY_GATES.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/en/README.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/en/TROUBLESHOOTING.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/en/USER_GUIDE.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/en/USE_CASES.md",
+      "status": "redirect",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/README.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/CLAUDE.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/AVALIACAO_ARQUITETURAL_PRODUTO_AI.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/AVALIACAO_MODELOS_LOCAIS.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/CI_PRODUTOS.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/CUSTOMIZACAO.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/DEPLOY.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/DEPLOYMENT.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/DIVIDAS_TECNICAS.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/EVIDENCIA_K3D_2026-10-18.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/GETTING_STARTED.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/GOVERNANCA.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/MANUAL.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/RERANKER_BENCHMARK.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/ROADMAP.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/ROADMAP_SEMANTIC_AI.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/ROTEIRO_DE_AVALIACAO.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/TCO_SAP_AI_CORE_VS_SELF_HOSTED.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/TRACEABILITY.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/TROUBLESHOOTING.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/TUTORIAL_ACESSIBILIDADE_MULTIVENDOR.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/TUTORIAL_ARQUITETURA_DEBUG.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/TUTORIAL_FASE9_MULTIVENDOR_GRAPHRAG_A2A.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/TUTORIAL_K3D_KUBERNETES_LOCAL.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/USER_GUIDE.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/dossier/05-solution-architecture.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/en/ARCHITECTURE.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/en/ARCHITECTURE_DECISIONS.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/en/CONNECTORS.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/en/DEPLOY.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/en/GETTING_STARTED.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/en/GLOSSARY.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/en/QUALITY_GATES.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/en/README.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/en/TROUBLESHOOTING.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/en/USER_GUIDE.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/docs/en/USE_CASES.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/packages/core/docs/CONTRACTS.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/packages/core/docs/DISTRIBUTION.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "docs/history/monorepo/packages/core/docs/RELEASE.md",
+      "status": "historical",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "operations/README.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "packages/core/README.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "packages/core/docs/CONTRACTS.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "packages/core/docs/DISTRIBUTION.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "packages/core/docs/OPERATIONS.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "packages/core/docs/RELEASE.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    },
+    {
+      "path": "packages/core-ui/README.md",
+      "status": "current",
+      "owner": "copilot-platform"
+    }
+  ]
+}

@@ -1,5 +1,10 @@
 # Mapeamento GRC - Integration Incident Copilot
 
+> Referência compartilhada de Copilot Platform. Para instalação e propriedade
+> atuais, consulte [o índice](README.md) e [a plataforma](PLATFORM.md).
+> DAs e evidências mantêm sua cronologia. Seções de UI/Compose/Kyma herdadas
+> descrevem o antigo monorepo; use os guias do produto para implantação atual.
+
 ## Visão Geral
 
 Este documento descreve o mapeamento dos controles de segurança e governança

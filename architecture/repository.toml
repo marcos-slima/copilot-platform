@@ -1,7 +1,21 @@
-# DA-96: only current platform documentation is audited as operational guidance.
+# DA-96: maintained operational documentation, distinct from historical/reference prose.
 role = "platform"
 documentation = [
-"README.md", "AGENTS.md", "CONTRIBUTING.md",
-"docs/PLATFORM.md", "docs/RELEASES.md", "docs/OWNERSHIP.md",
-"packages/core/README.md", "packages/core-ui/README.md", "operations/README.md"
+"AGENTS.md",
+"CONTRIBUTING.md",
+"README.md",
+"docs/DEVELOPMENT.md",
+"docs/DOCUMENTATION_POLICY.md",
+"docs/OWNERSHIP.md",
+"docs/PLATFORM.md",
+"docs/README.md",
+"docs/RELEASES.md",
+"docs/en/README.md",
+"operations/README.md",
+"packages/core/README.md",
+"packages/core/docs/CONTRACTS.md",
+"packages/core/docs/DISTRIBUTION.md",
+"packages/core/docs/OPERATIONS.md",
+"packages/core/docs/RELEASE.md",
+"packages/core-ui/README.md",
 ]
