@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -10,7 +11,9 @@ import sys
 import tarfile
 import tempfile
 import zipfile
+from contextlib import contextmanager, nullcontext
 from pathlib import Path, PurePosixPath
+from uuid import uuid4
 
 
 def verify(directory: Path) -> tuple[Path, Path]:
@@ -93,7 +96,37 @@ def verify(directory: Path) -> tuple[Path, Path]:
     return wheel, operations
 
 
-def smoke(wheel: Path, operations: Path) -> None:
+@contextmanager
+def disposable_database(admin_url: str):
+    """Create and drop our own database; never migrate the supplied admin database."""
+    import psycopg2
+    from psycopg2 import sql
+    from sqlalchemy.engine import make_url
+
+    url = make_url(admin_url)
+    if url.get_backend_name() != "postgresql":
+        raise ValueError("Operations validation requires PostgreSQL")
+    url = url.set(drivername="postgresql")
+    name = "copilot_artifact_" + uuid4().hex
+    connection = psycopg2.connect(url.render_as_string(hide_password=False), connect_timeout=10)
+    connection.autocommit = True
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                sql.SQL("CREATE DATABASE {} TEMPLATE template0").format(sql.Identifier(name))
+            )
+        try:
+            yield url.set(database=name).render_as_string(hide_password=False)
+        finally:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name))
+                )
+    finally:
+        connection.close()
+
+
+def smoke(wheel: Path, operations: Path, database_url: str = "") -> None:
     with tempfile.TemporaryDirectory(prefix="copilot-installed-distribution-") as temporary:
         root = Path(temporary)
         installed = root / "site"
@@ -133,10 +166,22 @@ assert len(scripts.get_heads()) == 1
 assert list(scripts.walk_revisions())
 print('Installed core and operations load without product sources; migration graph has one head')
 """
+        if database_url:
+            code += """
+from alembic import command
+config = Config(str(pathlib.Path(sys.argv[2]) / 'alembic.ini'))
+command.upgrade(config, 'head')
+command.check(config)
+# Execute the validator shipped in the extracted bundle, using the candidate core.
+import runpy
+os.chdir(sys.argv[2])
+sys.argv = [str(pathlib.Path.cwd() / 'scripts/validate_dashboards.py')]
+runpy.run_path(sys.argv[0], run_name='__main__')
+"""
         env = {
             **os.environ,
             "DOMAIN_PLUGINS": "",
-            "DATABASE_URL": "",
+            "DATABASE_URL": database_url,
             "REDIS_URL": "",
             "GRAPH_RAG_ENABLED": "false",
             "CHECKPOINTING_ENABLED": "false",
@@ -150,6 +195,23 @@ print('Installed core and operations load without product sources; migration gra
         )
 
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("directory", type=Path)
+    parser.add_argument(
+        "--postgres",
+        action="store_true",
+        help="Validate migrations/queries in a disposable database; requires OPERATIONS_TEST_DATABASE_URL",
+    )
+    args = parser.parse_args()
+    admin_url = os.environ.get("OPERATIONS_TEST_DATABASE_URL", "")
+    if args.postgres and not admin_url:
+        parser.error("--postgres requires OPERATIONS_TEST_DATABASE_URL")
+    wheel, operations = verify(args.directory.resolve())
+    database = disposable_database(admin_url) if args.postgres else nullcontext("")
+    with database as database_url:
+        smoke(wheel, operations, database_url)
+
+
 if __name__ == "__main__":
-    wheel, operations = verify(Path(sys.argv[1]))
-    smoke(wheel, operations)
+    main()

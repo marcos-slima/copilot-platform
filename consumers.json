@@ -1,7 +1,7 @@
 {
   "iic": {
     "repository": "https://github.com/marcos-slima/integration-incident-copilot.git",
-    "commit": "29933accbbdca9420b1e96a005ddf4bbb5bc3023"
+    "commit": "4a4b0e4b71016402863e20d63b132d5261c8e360"
   },
   "fisc": {
     "repository": "https://github.com/marcos-slima/fiscal-incident-support-copilot.git",

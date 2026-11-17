@@ -26,12 +26,30 @@ jobs:
     - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends
         cmake make gcc pkg-config libssl-dev libffi-dev libsasl2-dev libsasl2-2
     - run: uv sync --all-packages --group dev --locked
-    - run: uv run python scripts/quality_gate.py
+    - run: uv run python scripts/quality_gate.py --json dist/test-evidence/quality-gate.json
     - run: uv run ruff check packages/core/src scripts tests
-    - run: uv run pytest tests/ -m "not integration" -q --tb=short --cov=app --cov-fail-under=80
+    - run: uv run pytest tests/ -m "not integration" -q --tb=short --cov=app --cov-fail-under=80 --cov-report=term --cov-report=json:dist/test-evidence/coverage.json --junitxml=dist/test-evidence/unit.xml -o faulthandler_timeout=60
     - run: python3 -m unittest discover -s scripts/tests -v
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: platform-test-evidence-${{ github.sha }}-${{ github.run_attempt }}
+        path: dist/test-evidence/
+        retention-days: 30
+        if-no-files-found: warn
   distribution:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: artifact_ci
+          POSTGRES_PASSWORD: artifact_ci
+          POSTGRES_DB: postgres
+        ports:
+        - 5432:5432
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s
+          --health-retries 10
     needs:
     - quality_tests
     - migrations
@@ -54,7 +72,10 @@ jobs:
     - run: npm ci --ignore-scripts
     - run: npm test
     - run: uv run python scripts/build_shared_distribution.py --out-dir dist/shared
-    - run: uv run python scripts/verify_shared_distribution.py dist/shared
+    - name: Validate extracted operations with installed candidate wheel
+      env:
+        OPERATIONS_TEST_DATABASE_URL: postgresql://artifact_ci:artifact_ci@localhost:5432/postgres
+      run: uv run python scripts/verify_shared_distribution.py dist/shared --postgres
     - uses: actions/upload-artifact@v4
       with:
         name: platform-libraries-${{ github.sha }}
@@ -194,6 +215,19 @@ jobs:
         --exit-code 1'
   consumer_iic:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: consumer_ci
+          POSTGRES_PASSWORD: consumer_ci
+          POSTGRES_DB: postgres
+        ports:
+        - 5432:5432
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s
+          --health-retries 10
+    env:
+      OPERATIONS_TEST_DATABASE_URL: postgresql://consumer_ci:consumer_ci@localhost:5432/postgres
     needs:
     - distribution
     timeout-minutes: 20
@@ -214,9 +248,27 @@ jobs:
         path: dist/shared
     - name: Check pinned iic consumer
       run: python3 scripts/check_consumer.py --artifacts dist/shared --manifest consumers.json
-        --kind iic
+        --kind iic --postgres --report dist/consumer-iic.json
+    - uses: actions/upload-artifact@v4
+      with:
+        name: consumer-iic-${{ github.sha }}
+        path: dist/consumer-iic.json
+        if-no-files-found: error
   consumer_fisc:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: consumer_ci
+          POSTGRES_PASSWORD: consumer_ci
+          POSTGRES_DB: postgres
+        ports:
+        - 5432:5432
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s
+          --health-retries 10
+    env:
+      OPERATIONS_TEST_DATABASE_URL: postgresql://consumer_ci:consumer_ci@localhost:5432/postgres
     needs:
     - distribution
     timeout-minutes: 20
@@ -237,4 +289,9 @@ jobs:
         path: dist/shared
     - name: Check pinned fisc consumer
       run: python3 scripts/check_consumer.py --artifacts dist/shared --manifest consumers.json
-        --kind fisc
+        --kind fisc --postgres --report dist/consumer-fisc.json
+    - uses: actions/upload-artifact@v4
+      with:
+        name: consumer-fisc-${{ github.sha }}
+        path: dist/consumer-fisc.json
+        if-no-files-found: error
