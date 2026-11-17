@@ -1,5 +1,10 @@
 # Arquitetura Detalhada
 
+> Referência compartilhada de Copilot Platform. Para instalação e propriedade
+> atuais, consulte [o índice](README.md) e [a plataforma](PLATFORM.md).
+> DAs e evidências mantêm sua cronologia. Seções de UI/Compose/Kyma herdadas
+> descrevem o antigo monorepo; use os guias do produto para implantação atual.
+
 Visao tecnica do que existe hoje no codigo - nao um plano aspiracional.
 Para o "porque" de cada decisao (problemas reais encontrados e como
 foram resolvidos), ver [`DECISOES_DE_ARQUITETURA.md`](DECISOES_DE_ARQUITETURA.md);

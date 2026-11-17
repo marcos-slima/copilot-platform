@@ -1,5 +1,10 @@
 # Conectores multi-vendor — guia de integração (DA-59)
 
+> Referência compartilhada de Copilot Platform. Para instalação e propriedade
+> atuais, consulte [o índice](README.md) e [a plataforma](PLATFORM.md).
+> DAs e evidências mantêm sua cronologia. Seções de UI/Compose/Kyma herdadas
+> descrevem o antigo monorepo; use os guias do produto para implantação atual.
+
 O Copilot tem **10 conectores**. Todos seguem o mesmo contrato:
 `fetch(identifier) → ConnectorResult`. O conector traz o dado do sistema de
 origem para o diagnóstico, e esse dado vira evidência com nível de confiança

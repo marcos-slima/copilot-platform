@@ -14,6 +14,8 @@ Os produtos permanecem em repositórios próprios:
 [FISC](https://github.com/marcos-slima/fiscal-incident-support-copilot).
 Este repositório não é uma aplicação de produto nem um serviço remoto obrigatório.
 
+Comece pelo [índice documental](docs/README.md).
+
 Veja [arquitetura](docs/PLATFORM.md), [releases](docs/RELEASES.md),
 [propriedade](docs/OWNERSHIP.md) e [operação](operations/README.md).
 

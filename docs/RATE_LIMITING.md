@@ -1,5 +1,10 @@
 # Rate limiting
 
+> Referência compartilhada de Copilot Platform. Para instalação e propriedade
+> atuais, consulte [o índice](README.md) e [a plataforma](PLATFORM.md).
+> DAs e evidências mantêm sua cronologia. Seções de UI/Compose/Kyma herdadas
+> descrevem o antigo monorepo; use os guias do produto para implantação atual.
+
 Implementação: [SlowAPI](https://slowapi.readthedocs.io/) em `packages/core/src/app/rate_limit.py`,
 aplicada pelo `SlowAPIMiddleware` (`packages/core/src/app/main.py`) e por decorators
 `@limiter.limit(...)` nas rotas.

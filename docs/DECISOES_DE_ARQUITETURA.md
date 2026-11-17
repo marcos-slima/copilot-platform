@@ -1,5 +1,10 @@
 # Decisões de Arquitetura
 
+> Referência compartilhada de Copilot Platform. Para instalação e propriedade
+> atuais, consulte [o índice](README.md) e [a plataforma](PLATFORM.md).
+> DAs e evidências mantêm sua cronologia. Seções de UI/Compose/Kyma herdadas
+> descrevem o antigo monorepo; use os guias do produto para implantação atual.
+
 Registro das decisões de arquitetura (DAs) do Integration Incident Copilot:
 o problema real encontrado, a solução adotada, como foi validada e as
 limitações aceitas. É o "porquê" do projeto; o "o quê" e o "onde" estão em
