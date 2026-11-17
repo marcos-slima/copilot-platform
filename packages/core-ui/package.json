@@ -1,7 +1,7 @@
 {
   "name": "@copilot/core-ui",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DA-95: biblioteca de UI do core - cliente da API, sessao, i18n e componentes neutros de diagnostico. Nao conhece nenhum produto.",
   "type": "module",
   "exports": {
@@ -47,7 +47,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/marcos-slima/integration-incident-copilot.git",
+    "url": "git+https://github.com/marcos-slima/copilot-platform.git",
     "directory": "packages/core-ui"
   }
 }

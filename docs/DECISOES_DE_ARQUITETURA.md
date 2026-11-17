@@ -104,6 +104,7 @@ final.
 | 93 | [85](#85-fatos--hipóteses-e-domínio-fiscal-da-93) | Fatos × hipóteses (`findings`, `cause_status`, `rule_reference`); fases fiscais movidas para o DF-e Copilot |
 | 94 | [86](#86-separação-de-produto-core-compartilhado-e-df-e-copilot-da-94) | Separação de produto: core compartilhado + DF-e Copilot (monorepo, plugin de domínio) |
 | 95 | [87](#87-fronteiras-de-produto-app-sdk-core-ui-e-shells-da-95) | Fronteiras de produto: `app.sdk`, `@copilot/core-ui`, shells de UI e gate `import_boundaries` |
+| 96 | [88](#88-plataforma-neutra-da-96) | Plataforma compartilhada e escopo de propriedade |
 | 64 | [84](#84-ontologia-quebrada-correção-de-bug-em-retrieve_node-da-64) | Ontologia quebrada (correção de bug em `retrieve_node`) |
 
 > **Ordenação da prosa:** as seções §42–§47 (DA-42, DA-38, DA-39, DA-40,
@@ -3641,3 +3642,19 @@ Nenhuma publicação ou implantação remota é automática nesta entrega.
 ---
 
 **Fim do documento.**
+
+### 88. Plataforma neutra (DA-96)
+
+Problema: core/UI já são distribuíveis, mas validação e operações ainda eram
+acopladas ao monorepo IIC. Solução: repositório neutro com versões próprias
+de core, UI e operações, preservando namespace e contratos.
+architecture/repository.toml define a documentação operacional auditada;
+documentos históricos e DAs continuam preservados, mas seus caminhos da época
+não são tratados como instruções atuais. Política inválida ou arquivos ausentes falham.
+O gate de conectores mantém registro, Literals, CLI, supervisor, seed e admin;
+o dropdown pertence ao IIC e deve ser conferido no teste do consumidor.
+Sem política, o comportamento legado é mantido. Não são removidos os checks
+de conectores do SDK nem os testes de mutação. CI executa gates e suíte juntos.
+Sem mudança de schema, regra fiscal, roteamento, prompts ou IDs de migrations.
+Limitação: validar produtos é responsabilidade compartilhada dos pipelines
+da plataforma e consumidores, não evidência de homologação SAP/SEFAZ.

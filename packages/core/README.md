@@ -1,40 +1,9 @@
 # Copilot Core
 
-Pacote Python `copilot-core` 1.4.0. A implementação reside em `src/app`, mantendo
-os imports históricos `app.*`. Produtos importam exclusivamente `app.sdk`;
-o core não depende dos pacotes IIC ou DF-e. A biblioteca neutra de UI é
-`@copilot/core-ui`, em `../core-ui`.
+Biblioteca Python compartilhada 1.4.1. Imports públicos de produto usam app.sdk.
+O core não importa IIC ou FISC. Contratos HTTP/SDK 1.0 e plugin 1.1.
+O pacote inclui templates, traduções, ontologia e skills.
 
-## Construção e consumo
-
-```bash
-uv build --wheel
-```
-
-O wheel inclui Python, templates, arquivos de idioma, ontologia e as skills de
-`data/skills`. Não requer fontes de produto para ser construído. No monorepo,
-`uv sync --locked --all-packages` instala os três pacotes. Fora dele, instale
-os wheels de core e produto no mesmo ambiente com uv.
-
-O pacote fornece serviços de diagnóstico, autenticação e infraestrutura de
-conectores. `iic_copilot.main` e `dfe_copilot.main` são entradas de produto.
-`app.main` continua disponível para compatibilidade. A configuração externa
-continua em variáveis de ambiente/`.env` do diretório de execução. Arquivos
-operacionais de dados usam `COPILOT_HOME` quando definido, a raiz do monorepo
-quando descoberta, e o diretório atual em uma instalação independente.
-
-## Contratos
-
-Veja `docs/CONTRACTS.md`. Versões de contrato são independentes da versão do
-pacote. A suíte completa do core está em `../../tests`; sua execução no
-workspace é `uv run pytest tests/ -m "not integration"` a partir da raiz.
-O namespace Python é exclusivo deste pacote: não instale versões antigas do
-IIC que também distribuíam `app` no mesmo ambiente de produção. No workspace,
-`uv sync --locked` atualiza a distribuição raiz e evita esse conflito.
-A prova de distribuição é `uv run python scripts/test_product_isolation.py`.
-
-## Distribuição e operação
-
-Veja [canais e preparação de distribuição](docs/DISTRIBUTION.md) e o
-[pacote operacional de migrations](docs/OPERATIONS.md). O build prepara
-artefatos portáteis; não publica versões em registros.
+Construção: uv build --package copilot-core --wheel --sdist.
+Teste e gate são executados da raiz da plataforma. Operações têm versão própria.
+O namespace app é exclusivo deste pacote; consumidores instalam o wheel.

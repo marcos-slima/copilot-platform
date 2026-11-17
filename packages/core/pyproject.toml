@@ -1,6 +1,6 @@
 [project]
 name = "copilot-core"
-version = "1.4.0"
+version = "1.4.1"
 description = "Core compartilhado de diagnóstico, contratos e infraestrutura de agentes"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -94,8 +94,8 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/marcos-slima/integration-incident-copilot"
-Documentation = "https://github.com/marcos-slima/integration-incident-copilot/tree/feat/dfe-runtime-existing-kb/packages/core"
+Repository = "https://github.com/marcos-slima/copilot-platform"
+Documentation = "https://github.com/marcos-slima/copilot-platform/tree/feat/dfe-runtime-existing-kb/packages/core"
 
 [project.optional-dependencies]
 # DA-26: Opcional: so necessario se LLM_PROVIDER=openai ou azure_openai no

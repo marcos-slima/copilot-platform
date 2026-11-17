@@ -135,6 +135,9 @@ def test_capability_registry_vem_dos_yamls_com_os_valores_do_fallback() -> None:
     }
 
 
-def test_dockerfile_copia_as_skills() -> None:
-    dockerfile = (REPO / "Dockerfile").read_text(encoding="utf-8")
-    assert "COPY --chown=appuser:appuser packages/core/data/skills/ data/skills/" in dockerfile
+def test_wheel_declares_bundled_skills():
+    import tomllib
+
+    manifest = tomllib.loads((REPO / "packages/core/pyproject.toml").read_text())
+    includes = manifest["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
+    assert includes["data/skills"] == "app/_data/skills"

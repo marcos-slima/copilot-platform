@@ -26,6 +26,7 @@ class OperationsTests(unittest.TestCase):
             "scripts/validate_dashboards.py": "# validator",
             "deploy/grafana/dashboards/example.json": "{}",
             "packages/core/docs/OPERATIONS.md": "Operations fixture",
+            "operations/component.toml": '[component]\nversion="1.2.3"\n[compatibility]\ntested_core_versions=["1.4.1"]\n',
             ".env": "LOCAL_ONLY",
             "alembic/versions/.env": "LOCAL_ONLY",
             "packages/dfe/data/client.xml": "CUSTOMER_DATA",
@@ -48,7 +49,7 @@ class OperationsTests(unittest.TestCase):
             self.assertFalse(any(".env" in name or "client.xml" in name for name in names))
             manifest = json.load(contents.extractfile("MANIFEST.json"))
         self.assertEqual(manifest["source_commit"], "a" * 40)
-        self.assertEqual(manifest["core_version"], "1.2.3")
+        self.assertEqual(manifest["operations_version"], "1.2.3")
         self.assertEqual(
             manifest["files_sha256"]["alembic.ini"], build.digest(self.root / "alembic.ini")
         )

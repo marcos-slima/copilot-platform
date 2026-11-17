@@ -1,0 +1,11 @@
+{
+  "name": "copilot-platform-workspace",
+  "private": true,
+  "workspaces": [
+    "packages/core-ui"
+  ],
+  "scripts": {
+    "build": "npm run build -w @copilot/core-ui",
+    "test": "npm test -w @copilot/core-ui"
+  }
+}

@@ -1,0 +1,31 @@
+name: Publish component
+'on':
+  workflow_dispatch:
+    inputs:
+      component:
+        type: choice
+        options:
+        - core
+        - core-ui
+        - operations
+        required: true
+      run_id:
+        type: string
+        required: true
+        description: Successful Platform CI run on main
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Promote verified artifact
+      env:
+        GH_TOKEN: ${{ github.token }}
+        COMPONENT: ${{ inputs.component }}
+        RUN_ID: ${{ inputs.run_id }}
+        REPOSITORY: ${{ github.repository }}
+      run: python3 scripts/publish_component.py --repository "$REPOSITORY" --run-id
+        "$RUN_ID" --component "$COMPONENT"

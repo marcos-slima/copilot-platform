@@ -30,7 +30,7 @@ def verify(directory: Path) -> tuple[Path, Path]:
     version = metadata["core_version"]
     (wheel,) = directory.glob("copilot_core-*.whl")
     sdist = directory / f"copilot_core-{version}.tar.gz"
-    operations = directory / f"copilot-core-operations-{version}.tar.gz"
+    operations = directory / f"copilot-operations-{metadata['operations_version']}.tar.gz"
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
         required = {
@@ -58,7 +58,8 @@ def verify(directory: Path) -> tuple[Path, Path]:
             raise ValueError("Unsafe operations archive")
         manifest = json.load(archive.extractfile("MANIFEST.json"))
         if (
-            manifest["core_version"] != version
+            manifest["operations_version"] != metadata["operations_version"]
+            or version not in manifest["compatible_core_versions"]
             or manifest["source_commit"] != metadata["source_commit"]
         ):
             raise ValueError("Operations/core provenance mismatch")

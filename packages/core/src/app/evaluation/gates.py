@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import tomllib
 from dataclasses import dataclass
 from datetime import UTC
 from pathlib import Path
@@ -1013,11 +1014,33 @@ def _iter_docs(root: Path) -> list[Path]:
     return [d for d in todos if d not in ignorados]
 
 
+def _repository_profile(root: Path) -> dict:
+    """DA-96: explicit ownership; absent policy preserves legacy IIC behavior."""
+    path = root / "architecture/repository.toml"
+    if not path.exists():
+        return {}
+    profile = tomllib.loads(path.read_text(encoding="utf-8"))
+    if profile.get("role") != "platform":
+        raise ValueError("Unknown repository role")
+    docs = profile.get("documentation")
+    if not isinstance(docs, list) or not docs:
+        raise ValueError("Platform documentation inventory is required")
+    for item in docs:
+        if not isinstance(item, str) or Path(item).is_absolute() or ".." in Path(item).parts:
+            raise ValueError("Unsafe documentation inventory")
+        if not (root / item).is_file():
+            raise FileNotFoundError(root / item)
+    return profile
+
+
 def _markdown_docs(root: Path) -> list[Path]:
     """docs/ mais os dois markdown da raiz que fazem indice do conjunto.
 
     Exclui docs de aula (DA_AULA_*.md) que contem exemplos ficticios e
     definicoes que sao parte do tutorial, nao do modulo production-ready."""
+    profile = _repository_profile(root)
+    if profile:
+        return [root / item for item in profile["documentation"]]
     docs = [d for d in _iter_docs(root) if not d.name.startswith("DA_AULA_")]
     for extra in (Path("README.md"), Path("CLAUDE.md")):
         if (root / extra).is_file():
@@ -1498,18 +1521,21 @@ def check_connector_reachable(root: Path = REPO_ROOT) -> list[Finding]:
     # successfactors aceito pelo Literal, pelo CLI, pelo supervisor e
     # pelo catalogo — e ausente do dropdown, invisivel para quem so
     # opera pela interface. Gates verdes, conector morto na tela.
-    try:
-        ui_fonte = (root / UI_DROPDOWN_SOURCE).read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return _fail(check, f"{UI_DROPDOWN_SOURCE} nao existe — dropdown da UI sem checagem")
-    m_ui = re.search(r"const SYSTEMS[^=]*=\s*\[(.*?)\];", ui_fonte, re.DOTALL)
-    if m_ui is None:
-        problemas.append(f"{UI_DROPDOWN_SOURCE}: dropdown SYSTEMS nao encontrado")
-    else:
-        ui_valores = {v for v in re.findall(r"\[\s*'([a-z_]*)'\s*,", m_ui.group(1)) if v}
-        ausentes = sorted(conectores - ui_valores)
-        if ausentes:
-            problemas.append(f"{UI_DROPDOWN_SOURCE}: dropdown nao oferece {ausentes} ao usuario")
+    if not _repository_profile(root):
+        try:
+            ui_fonte = (root / UI_DROPDOWN_SOURCE).read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return _fail(check, f"{UI_DROPDOWN_SOURCE} nao existe — dropdown da UI sem checagem")
+        m_ui = re.search(r"const SYSTEMS[^=]*=\s*\[(.*?)\];", ui_fonte, re.DOTALL)
+        if m_ui is None:
+            problemas.append(f"{UI_DROPDOWN_SOURCE}: dropdown SYSTEMS nao encontrado")
+        else:
+            ui_valores = {v for v in re.findall(r"\[\s*'([a-z_]*)'\s*,", m_ui.group(1)) if v}
+            ausentes = sorted(conectores - ui_valores)
+            if ausentes:
+                problemas.append(
+                    f"{UI_DROPDOWN_SOURCE}: dropdown nao oferece {ausentes} ao usuario"
+                )
 
     # A sexta superficie e' o catalogo de sistemas do admin (DA-49), que
     # mantem a propria tupla `CONNECTOR_TYPES` para poder casar incidente

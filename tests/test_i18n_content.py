@@ -363,8 +363,6 @@ def test_catalogos_das_uis_traduzem_todos_os_codigos_de_soberania():
     from app.llm.routing import _SOVEREIGNTY_TEXT
 
     for path in (
-        ROOT / "frontend/src/i18n/locales/en.json",
-        ROOT / "frontend/src/i18n/locales/pt-BR.json",
         ROOT / "packages/core/src/app/i18n/locales/admin.en.json",
         ROOT / "packages/core/src/app/i18n/locales/admin.pt-BR.json",
     ):

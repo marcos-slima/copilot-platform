@@ -1,0 +1,35 @@
+[tool.uv.workspace]
+members = ["packages/core"]
+
+[tool.uv.sources]
+copilot-core = { workspace = true }
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv]
+constraint-dependencies = ["urllib3>=2.8.0"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[dependency-groups]
+dev = ["debugpy>=1.8.21", "httpx>=0.28.1", "huggingface-hub>=0.30", "langchain-openai>=1.6.0", "pre-commit>=4.6.1", "psutil>=7.2", "pytest>=9.1.1", "pytest-asyncio>=1.4.0", "aiosqlite>=0.20", "ruff>=0.16.1", "pytest-cov>=6.0", "bandit>=1.8", "pip-audit>=2.7", "copilot-core[openai,prometheus]==1.4.1", "torch>=2.14.1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+"integration: requires external services",
+"browser: requires Playwright",
+"neo4j_smoke: requires Neo4j",
+"postgres_smoke: requires PostgreSQL",
+"rag_quality: requires seeded Qdrant"
+]

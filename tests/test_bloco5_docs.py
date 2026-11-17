@@ -115,11 +115,3 @@ def test_documentos_ficticios_nao_voltam():
     ):
         assert not (docs / nome).exists()
     assert (docs / "CASOS_DE_USO.md").is_file()
-
-
-def test_kyma_desliga_o_fallback_da_reference_library():
-    """M-24: acervo de terceiros nao alimenta respostas na demo publica."""
-    import yaml
-
-    cm = yaml.safe_load((REPO_ROOT / "deploy/kyma/configmap.yaml").read_text(encoding="utf-8"))
-    assert cm["data"]["REFERENCE_LIBRARY_FALLBACK_ENABLED"] == "false"

@@ -1,0 +1,240 @@
+name: Platform CI
+'on':
+  push:
+    branches:
+    - main
+  pull_request: null
+  workflow_dispatch: null
+permissions:
+  contents: read
+concurrency:
+  group: platform-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  quality_tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v5
+      with:
+        version: 0.13.4
+        enable-cache: true
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends
+        cmake make gcc pkg-config libssl-dev libffi-dev libsasl2-dev libsasl2-2
+    - run: uv sync --all-packages --group dev --locked
+    - run: uv run python scripts/quality_gate.py
+    - run: uv run ruff check packages/core/src scripts tests
+    - run: uv run pytest tests/ -m "not integration" -q --tb=short --cov=app --cov-fail-under=80
+    - run: python3 -m unittest discover -s scripts/tests -v
+  distribution:
+    runs-on: ubuntu-latest
+    needs:
+    - quality_tests
+    - migrations
+    - rag
+    - neo4j
+    - security
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v5
+      with:
+        version: 0.13.4
+        enable-cache: true
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends
+        cmake make gcc pkg-config libssl-dev libffi-dev libsasl2-dev libsasl2-2
+    - run: uv sync --all-packages --group dev --locked
+    - run: npm ci --ignore-scripts
+    - run: npm test
+    - run: uv run python scripts/build_shared_distribution.py --out-dir dist/shared
+    - run: uv run python scripts/verify_shared_distribution.py dist/shared
+    - uses: actions/upload-artifact@v4
+      with:
+        name: platform-libraries-${{ github.sha }}
+        path: dist/shared/
+        retention-days: 30
+        if-no-files-found: error
+  migrations:
+    name: migrations + 45 queries dos dashboards
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: iic
+          POSTGRES_PASSWORD: iic
+          POSTGRES_DB: iic
+        ports:
+        - 5432:5432
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://iic:iic@localhost:5432/iic
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+        cache-dependency-glob: uv.lock
+        version: 0.13.4
+    - name: Instalar Python
+      run: uv python install
+    - name: "Sincronizar depend\xEAncias"
+      run: uv sync --all-packages --group dev --locked
+    - name: Alembic upgrade head (banco limpo)
+      run: uv run alembic upgrade head
+    - name: Alembic check (modelos == migrations)
+      run: uv run alembic check
+    - name: Validar as queries dos dashboards no Postgres real
+      run: uv run python scripts/validate_dashboards.py --dsn "$DATABASE_URL"
+    - name: DA-52 end-to-end (contrato -> baseline -> incidente)
+      env:
+        IIC_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+      run: uv run pytest tests/test_contracts_e2e.py -v
+  rag:
+    name: quality gate RAG (Qdrant real)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.19.0
+        ports:
+        - 6333:6333
+        options: --health-cmd "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333'" --health-interval
+          10s --health-timeout 5s --health-retries 10 --health-start-period 15s
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Instalar uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+        cache-dependency-glob: uv.lock
+        version: 0.13.4
+    - name: Instalar Python
+      run: uv python install
+    - name: Sincronizar dependencias
+      run: uv sync --all-packages --group dev --locked
+    - name: Ingerir documentos de avaliacao no Qdrant
+      env:
+        QDRANT_URL: http://localhost:6333
+        LLM_PROVIDER: ollama
+        EMBEDDING_BACKEND: fastembed
+      run: 'uv run python -m scripts.ingest --source data/sample_docs --collection
+        sap_docs
+
+        '
+    - name: "Pytest \u2014 quality gate RAG"
+      env:
+        QDRANT_URL: http://localhost:6333
+        LLM_PROVIDER: ollama
+        EMBEDDING_BACKEND: fastembed
+      run: uv run pytest -m rag_quality -v --tb=short
+  neo4j:
+    name: smoke test GraphRAG (Neo4j real)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      neo4j:
+        image: neo4j:5.26.0-community
+        env:
+          NEO4J_AUTH: neo4j/${{ secrets.NEO4J_PASSWORD_TEST || 'smoke-test-password'
+            }}
+        ports:
+        - 7687:7687
+        options: --health-cmd "wget -qO- http://localhost:7474 || exit 1" --health-interval
+          10s --health-timeout 5s --health-retries 10 --health-start-period 20s
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Instalar uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+        cache-dependency-glob: uv.lock
+        version: 0.13.4
+    - name: Instalar Python
+      run: uv python install
+    - name: "Sincronizar depend\xEAncias"
+      run: uv sync --all-packages --group dev --locked
+    - name: Aguardar Neo4j aceitar conexoes Bolt
+      env:
+        NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD_TEST || 'smoke-test-password' }}
+      run: "for i in $(seq 1 30); do\n  if uv run python -c \"from neo4j import GraphDatabase;\
+        \ import os; d = GraphDatabase.driver('bolt://127.0.0.1:7687', auth=('neo4j',\
+        \ os.environ['NEO4J_PASSWORD'])); d.verify_connectivity(); d.close()\"; then\n\
+        \    echo \"Neo4j pronto.\"\n    exit 0\n  fi\n  echo \"Aguardando Neo4j (tentativa\
+        \ $i/30)...\"\n  sleep 2\ndone\necho \"Neo4j nao respondeu a tempo.\" >&2\n\
+        exit 1\n"
+    - name: "Pytest \u2014 smoke test GraphRAG"
+      env:
+        NEO4J_URI: bolt://127.0.0.1:7687
+        NEO4J_USER: neo4j
+        NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD_TEST || 'smoke-test-password' }}
+      run: uv run pytest -m neo4j_smoke -v --tb=short
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Scan owned source before dependency installation
+      run: 'curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz
+        -o /tmp/gitleaks.tar.gz
+
+        tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+
+        /tmp/gitleaks detect --no-git --source . --config .gitleaks.toml --redact
+        --exit-code 1'
+  consumer_iic:
+    runs-on: ubuntu-latest
+    needs:
+    - distribution
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v5
+      with:
+        version: 0.13.4
+        enable-cache: true
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends
+        cmake make gcc pkg-config libssl-dev libffi-dev libsasl2-dev libsasl2-2
+    - uses: actions/download-artifact@v4
+      with:
+        name: platform-libraries-${{ github.sha }}
+        path: dist/shared
+    - name: Check pinned iic consumer
+      run: python3 scripts/check_consumer.py --artifacts dist/shared --manifest consumers.json
+        --kind iic
+  consumer_fisc:
+    runs-on: ubuntu-latest
+    needs:
+    - distribution
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v5
+      with:
+        version: 0.13.4
+        enable-cache: true
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends
+        cmake make gcc pkg-config libssl-dev libffi-dev libsasl2-dev libsasl2-2
+    - uses: actions/download-artifact@v4
+      with:
+        name: platform-libraries-${{ github.sha }}
+        path: dist/shared
+    - name: Check pinned fisc consumer
+      run: python3 scripts/check_consumer.py --artifacts dist/shared --manifest consumers.json
+        --kind fisc

@@ -92,9 +92,7 @@ def test_ts_imports_tipos_e_dinamico() -> None:
 
 def test_superficies_de_ui_descobertas() -> None:
     assert {str(p) for p in web_surfaces(ROOT)} == {
-        "frontend/src",
         "packages/core-ui/src",
-        "packages/dfe/frontend/src",
     }
 
 

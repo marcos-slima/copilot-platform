@@ -1846,3 +1846,32 @@ def test_write_baseline_grava_model_quando_fornecido(tmp_path: Path) -> None:
     _write_baseline(src, dst, model="gpt-4o-mini")
     loaded = json.loads(dst.read_text())
     assert loaded["model"] == "gpt-4o-mini"
+
+
+def test_platform_profile_keeps_core_connector_validation(tmp_path):
+    from app.evaluation.gates import CLI_SOURCE, UI_DROPDOWN_SOURCE
+
+    root = _connector_root(tmp_path, _SANE_REGISTRY, _literal_fiel(), _SANE_SUPERVISOR)
+    (root / "architecture").mkdir(exist_ok=True)
+    (root / "README.md").write_text("# Platform")
+    (root / "architecture/repository.toml").write_text(
+        'role = "platform"\ndocumentation = ["README.md"]\n'
+    )
+    (root / UI_DROPDOWN_SOURCE).unlink()
+    assert not [f for f in check_connector_reachable(root) if f.is_failure]
+    cli = root / CLI_SOURCE
+    cli.write_text(cli.read_text().replace("successfactors", "removed_fixture_connector"))
+    assert any(f.is_failure for f in check_connector_reachable(root))
+
+
+def test_platform_document_inventory_fails_closed(tmp_path):
+    from app.evaluation.gates import _repository_profile
+
+    (tmp_path / "architecture").mkdir()
+    path = tmp_path / "architecture/repository.toml"
+    path.write_text('role = "unknown"\ndocumentation = ["README.md"]\n')
+    with pytest.raises(ValueError):
+        _repository_profile(tmp_path)
+    path.write_text('role = "platform"\ndocumentation = ["missing.md"]\n')
+    with pytest.raises(FileNotFoundError):
+        _repository_profile(tmp_path)

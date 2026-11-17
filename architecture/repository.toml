@@ -1,0 +1,7 @@
+# DA-96: only current platform documentation is audited as operational guidance.
+role = "platform"
+documentation = [
+"README.md", "AGENTS.md", "CONTRIBUTING.md",
+"docs/PLATFORM.md", "docs/RELEASES.md", "docs/OWNERSHIP.md",
+"packages/core/README.md", "packages/core-ui/README.md", "operations/README.md"
+]

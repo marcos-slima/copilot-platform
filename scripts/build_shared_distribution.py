@@ -38,11 +38,14 @@ def operations_bundle(root: Path, out: Path, version: str, commit: str) -> Path:
         if path.is_symlink() or not path.is_file():
             raise ValueError(f"Unexpected operational resource: {path}")
     metadata = {
-        "core_version": version,
+        "operations_version": version,
+        "compatible_core_versions": tomllib.loads((root / "operations/component.toml").read_text())[
+            "compatibility"
+        ]["tested_core_versions"],
         "source_commit": commit,
         "files_sha256": {p.relative_to(root).as_posix(): digest(p) for p in paths},
     }
-    target = out / f"copilot-core-operations-{version}.tar.gz"
+    target = out / f"copilot-operations-{version}.tar.gz"
     with tarfile.open(target, "w:gz") as archive:
         for path in paths:
             if path.is_symlink() or not path.is_file():
@@ -92,7 +95,10 @@ def build(root: Path, out: Path) -> None:
         cwd=root,
         check=True,
     )
-    operations_bundle(root, out, version, commit)
+    operations_version = tomllib.loads((root / "operations/component.toml").read_text())[
+        "component"
+    ]["version"]
+    operations_bundle(root, out, operations_version, commit)
     # uv creates this marker even when an earlier build fails; it is not an artifact.
     (out / ".gitignore").unlink(missing_ok=True)
     metadata = {
@@ -102,6 +108,7 @@ def build(root: Path, out: Path) -> None:
         ),
         "source_commit": commit,
         "core_version": version,
+        "operations_version": operations_version,
         "core_ui_version": json.loads((root / "packages/core-ui/package.json").read_text())[
             "version"
         ],
