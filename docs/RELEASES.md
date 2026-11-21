@@ -40,3 +40,10 @@ de testes. O manual do bundle descreve esse alcance. Não altera IDs ou conteúd
 das migrations, prompts ou implementação do core/UI. Mantém compatibilidade
 com core 1.4.1. A publicação ocorre somente após CI aprovada na main; esta nota
 não comprova que a tag operations/v1.0.1 já tenha sido publicada.
+
+## Candidatos core 1.5.0 e operações 1.0.2
+
+O core 1.5.0 adiciona composição explícita de MCP e A2A ao SDK 1.0.
+O candidato de operações 1.0.2 inclui o core 1.5.0 na matriz a validar.
+As revisões e o conteúdo das migrations são preservados. O core e o bundle
+de operações passam pela qualificação conjunta e têm promoções independentes.

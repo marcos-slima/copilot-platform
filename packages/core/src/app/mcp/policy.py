@@ -50,6 +50,7 @@ Nao-objetivos explicitos desta v1 (backlog em aberto):
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -162,7 +163,12 @@ else:
 DEFAULT_EXECUTION_CONTEXT = ExecutionContext(granted_scopes=frozenset({"integration.read"}))
 
 
-def enforce(tool_name: str, context: ExecutionContext = DEFAULT_EXECUTION_CONTEXT) -> ToolPolicy:
+def enforce(
+    tool_name: str,
+    context: ExecutionContext = DEFAULT_EXECUTION_CONTEXT,
+    *,
+    registry: Mapping[str, ToolPolicy] | None = None,
+) -> ToolPolicy:
     """Verifica se `context` pode executar `tool_name` - levanta
     PolicyDeniedError se nao. Retorna a ToolPolicy correspondente
     quando permitido (o caller pode usar timeout_seconds/max_retries
@@ -171,12 +177,10 @@ def enforce(tool_name: str, context: ExecutionContext = DEFAULT_EXECUTION_CONTEX
     FAIL-CLOSED: uma tool sem entrada em CAPABILITY_REGISTRY e negada
     por padrao - nunca permitida so por nao ter sido explicitamente
     bloqueada."""
-    policy = CAPABILITY_REGISTRY.get(tool_name)
+    policy = (CAPABILITY_REGISTRY if registry is None else registry).get(tool_name)
     if policy is None:
         raise PolicyDeniedError(
-            f"Tool '{tool_name}' nao esta no Capability Registry - negada "
-            "por padrao (fail-closed). Registre a tool em "
-            "app/mcp/policy.py::CAPABILITY_REGISTRY antes de expor via @mcp.tool()."
+            f"Tool '{tool_name}' nao esta no Capability Registry - negada por padrao (fail-closed)."
         )
 
     missing_scopes = set(policy.scopes_required) - context.granted_scopes

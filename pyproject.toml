@@ -20,7 +20,7 @@ line-length = 100
 known-first-party = ["app"]
 
 [dependency-groups]
-dev = ["debugpy>=1.8.21", "httpx>=0.28.1", "huggingface-hub>=0.30", "langchain-openai>=1.6.0", "pre-commit>=4.6.1", "psutil>=7.2", "pytest>=9.1.1", "pytest-asyncio>=1.4.0", "aiosqlite>=0.20", "ruff>=0.16.1", "pytest-cov>=6.0", "bandit>=1.8", "pip-audit>=2.7", "copilot-core[openai,prometheus]==1.4.1", "torch>=2.14.1"]
+dev = ["debugpy>=1.8.21", "httpx>=0.28.1", "huggingface-hub>=0.30", "langchain-openai>=1.6.0", "pre-commit>=4.6.1", "psutil>=7.2", "pytest>=9.1.1", "pytest-asyncio>=1.4.0", "aiosqlite>=0.20", "ruff>=0.16.1", "pytest-cov>=6.0", "bandit>=1.8", "pip-audit>=2.7", "copilot-core[openai,prometheus]==1.5.0", "torch>=2.14.1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

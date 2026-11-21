@@ -17,6 +17,10 @@ Publicado em `GET /.well-known/agent-card.json` (path padrao do
 protocolo) por `app/main.py`.
 """
 
+from collections.abc import Mapping
+from copy import deepcopy
+from typing import Any
+
 from app.config import settings
 
 AGENT_CARD: dict = {
@@ -77,11 +81,12 @@ AGENT_CARD: dict = {
 }
 
 
-def get_agent_card() -> dict:
+def get_agent_card(definition: Mapping[str, Any] | None = None) -> dict:
     """Card completo. `a2a_api_key` NAO aparece aqui (nunca expor
     segredo no card publico) - so controla o header exigido nas
     chamadas ao endpoint JSON-RPC, ver app/a2a/server.py."""
-    card = dict(AGENT_CARD)
+    card = deepcopy(dict(AGENT_CARD if definition is None else definition))
+    card.update(protocolVersion="0.3.0", preferredTransport="JSONRPC", url="/a2a")
     # DA-30: resolve URL absoluta para o campo "url" do card — o spec
     # A2A 0.3 exige URL absoluta, nao um path relativo. Usa A2A_BASE_URL
     # quando configurado (ex: "https://copilot.empresa.com"), senao

@@ -43,6 +43,7 @@ autenticacao consistente em toda a superficie HTTP, nao dois.
 from __future__ import annotations
 
 import secrets
+from typing import TYPE_CHECKING
 
 from mcp.server.mcpserver import MCPServer
 from starlette.applications import Starlette
@@ -57,8 +58,28 @@ from app.connectors import (
     connector_status,
 )
 from app.exceptions import DiagnosisOverloadedError
-from app.mcp.policy import enforce
+from app.mcp.policy import ExecutionContext, enforce
 from app.models import IncidentRequest
+
+if TYPE_CHECKING:
+    from app.sdk.interfaces import MCPConfig
+
+
+class ProductMCPServer(MCPServer):
+    def __init__(self, config: MCPConfig) -> None:
+        super().__init__(name=config.name, version=config.version, instructions=config.instructions)
+        self._policies = {}
+        self._execution_context = ExecutionContext(granted_scopes=config.granted_scopes)
+        for tool in config.tools:
+            if tool.name in self._policies or tool.policy.name != tool.name:
+                raise ValueError(f"Política MCP inválida para {tool.name!r}")
+            self._policies[tool.name] = tool.policy
+            self.add_tool(tool.handler, name=tool.name)
+
+    async def call_tool(self, name, arguments, context=None):
+        enforce(name, self._execution_context, registry=self._policies)
+        return await super().call_tool(name, arguments, context)
+
 
 mcp = MCPServer(
     name="sap-integration-copilot",
@@ -152,6 +173,10 @@ def list_connectors() -> list[dict]:
     de GET /health.
     """
     enforce("list_connectors")
+    return connector_catalog()
+
+
+def connector_catalog() -> list[dict]:
     catalog = []
     for interface_type, state in connector_status().items():
         connector_cls = _REGISTRY[interface_type]
@@ -186,16 +211,16 @@ class RequireApiKeyMiddleware:
             return
         request = Request(scope, receive=receive)
         api_key = request.headers.get("x-api-key")
-        if not secrets.compare_digest(api_key or "", settings.api_key):
+        if not settings.api_key or not secrets.compare_digest(api_key or "", settings.api_key):
             response = JSONResponse({"error": "X-API-Key invalida ou ausente"}, status_code=401)
             await response(scope, receive, send)
             return
         await self.app(scope, receive, send)
 
 
-def build_mcp_asgi_app() -> Starlette:
+def build_mcp_asgi_app(server: MCPServer = mcp) -> Starlette:
     """App ASGI do servidor MCP, pronto para `app.mount("/mcp", ...)` em
     `app/main.py`, ja com a checagem de X-API-Key aplicada."""
-    inner = mcp.streamable_http_app(streamable_http_path="/")
+    inner = server.streamable_http_app(streamable_http_path="/")
     inner.add_middleware(RequireApiKeyMiddleware)
     return inner

@@ -5,9 +5,9 @@ Core Python, core-ui e operações têm versões independentes.
 
 | Componente | Versão | Conteúdo |
 |---|---|---|
-| copilot-core | 1.4.1 | SDK, grafo, gateway, RAG, evidências, auth e conectores |
+| copilot-core | 1.5.0 | SDK, grafo, gateway, RAG, evidências, auth e conectores |
 | @copilot/core-ui | 0.1.1 | ESM, tipos e CSS compartilhados |
-| copilot-operations | 1.0.1 | Migrations e dashboards; combinação testada com core 1.4.1 |
+| copilot-operations | 1.0.2 | Migrations e dashboards, candidato para core 1.5.0 |
 
 Os produtos permanecem em repositórios próprios:
 [IIC](https://github.com/marcos-slima/integration-incident-copilot) e

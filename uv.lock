@@ -648,7 +648,7 @@ wheels = [
 
 [[package]]
 name = "copilot-core"
-version = "1.4.1"
+version = "1.5.0"
 source = { editable = "packages/core" }
 dependencies = [
     { name = "aiofiles" },

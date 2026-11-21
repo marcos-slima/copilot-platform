@@ -54,3 +54,27 @@ A matriz comprova compatibilidade dos commits fixados com os artefatos testados.
 Não comprova todos os commits futuros dos produtos, build de suas imagens,
 inferência real ou homologação fiscal. Essas verificações mantêm seus próprios
 pipelines e evidências.
+
+## Interfaces MCP e A2A
+
+A plataforma mantém transporte, autenticação, autorização de ferramentas MCP e
+ciclo de vida de tarefas A2A. O ponto de entrada de cada produto define a
+identidade do agente, as skills publicadas, as ferramentas e seus handlers.
+
+Use `app.sdk.asgi_app(interfaces=AgentInterfaces(...))` no shell. Forneça
+`MCPConfig` com a identidade MCP, as ferramentas `MCPTool`, suas políticas
+`ToolPolicy` e os escopos concedidos à chave. Uma chamada requer política
+registrada e escopos suficientes. Configure `A2AConfig` com o Agent Card
+do produto, um handler de diagnóstico e um namespace Redis estável por produto.
+O core resolve a URL e os metadados de transporte e segurança do card.
+Uma configuração `None` no campo de cada protocolo omite suas rotas.
+Para desabilitar ambos, passe `AgentInterfaces()`.
+
+`app.main:app` e `asgi_app()` preservam o perfil histórico para IIC, FISC e
+testes que ainda dependem dele. Na migração, o IIC deve registrar o mesmo card
+e as mesmas ferramentas e manter o prefixo Redis histórico com
+`task_namespace=None`, reservado a deploys com Redis isolado. O ponto de
+entrada fiscal herda as superfícies históricas. O perfil temporário
+`legacy_agent_interfaces(task_namespace="fisc")` permite ao FISC preservar
+essas interfaces com composição explícita e isolamento de tarefas em Redis.
+O Compose fiscal usa tarefas em memória.

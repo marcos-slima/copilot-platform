@@ -92,7 +92,10 @@ async def handle_jsonrpc(
             status_code=429,
             headers={"Retry-After": "60"},
         )
-    if not _check_auth(x_a2a_api_key):
+    if not _check_auth(x_a2a_api_key) or (
+        getattr(request.app.state, "a2a_task_manager", None) is not None
+        and not settings.a2a_api_key
+    ):
         auth_guard.register_failure("a2a", ip)
         return JSONResponse(
             _jsonrpc_error(request_id, -32000, "Unauthorized: X-A2A-Api-Key ausente ou invalido"),
@@ -135,4 +138,7 @@ async def a2a_endpoint(
     request: Request,
     x_a2a_api_key: str | None = Header(default=None),
 ) -> JSONResponse:
-    return await handle_jsonrpc(request, get_default_task_manager(), x_a2a_api_key)
+    manager = getattr(request.app.state, "a2a_task_manager", None)
+    return await handle_jsonrpc(
+        request, manager if manager is not None else get_default_task_manager(), x_a2a_api_key
+    )

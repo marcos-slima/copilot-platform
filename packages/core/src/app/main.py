@@ -2,12 +2,22 @@
 
 import logging
 import secrets
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
+from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, Security, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    HTTPException,
+    Request,
+    Security,
+    status,
+)
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.security import APIKeyHeader
@@ -20,6 +30,8 @@ from slowapi.middleware import SlowAPIMiddleware
 from app import auth_guard
 from app.a2a.agent_card import get_agent_card
 from app.a2a.server import router as a2a_router
+from app.a2a.task_manager import TaskManager
+from app.a2a.task_store import get_default_task_store
 from app.admin.routes import router as admin_router  # DA-46/47/48
 from app.admin.security import ensure_admin_key_configured
 from app.admin.ui import ui_router as admin_ui_router
@@ -41,7 +53,7 @@ from app.events.consumer import handle_incident_event_async
 from app.exceptions import ConfigurationError, DiagnosisOverloadedError, DiagnosisTimeoutError
 from app.llm.budget import BudgetExhaustedError
 from app.llm.gateway import PolicyViolationError, describe_effective_policy
-from app.mcp.server import build_mcp_asgi_app
+from app.mcp.server import ProductMCPServer, build_mcp_asgi_app
 from app.mcp.server import mcp as mcp_server
 from app.metrics import setup_metrics
 from app.models import (
@@ -54,6 +66,7 @@ from app.models import (
 from app.queue import AsyncQueueUnavailableError, enqueue_diagnosis, get_job_status
 from app.rag.graph_store import GRAPH_UNAVAILABLE_EXCEPTIONS, ensure_constraints, verify_incident
 from app.rate_limit import limiter
+from app.sdk.interfaces import AgentInterfaces
 from app.services.incident_recorder import record_verification  # DA-50
 
 logger = logging.getLogger(__name__)
@@ -280,12 +293,10 @@ async def lifespan(app: FastAPI):
     # proprio lifespan rodando - `app.mount()` NAO propaga eventos de
     # lifespan para sub-apps automaticamente (limitacao do Starlette),
     # entao entramos nesse contexto aqui, no lifespan do app raiz.
-    # ATENCAO (testes): `session_manager.run()` so pode ser chamado UMA
-    # vez por instancia de processo - o SDK MCP levanta RuntimeError na
-    # segunda tentativa. Como `app` e um singleto global, so pode haver
-    # UM `with TestClient(app) as ...` (que dispara o lifespan) em toda
-    # a suite de testes - ver tests/test_mcp.py.
-    async with mcp_server.session_manager.run():
+    server = app.state.mcp_server
+    async with AsyncExitStack() as stack:
+        if server is not None:
+            await stack.enter_async_context(server.session_manager.run())
         await amqp_consumer.start()  # DA-32: inicia consumidor AMQP (no-op se AMQP_ENABLED=false)
         try:
             yield
@@ -295,29 +306,7 @@ async def lifespan(app: FastAPI):
         get_client().flush()
 
 
-app = FastAPI(
-    title="SAP Integration Copilot",
-    description="Assistente de IA para diagnostico de incidentes de integracao SAP",
-    version="1.4.0",
-    lifespan=lifespan,
-    # DEP-01: docs desligaveis em producao (EXPOSE_API_DOCS=false).
-    docs_url="/docs" if settings.expose_api_docs else None,
-    redoc_url="/redoc" if settings.expose_api_docs else None,
-    openapi_url="/openapi.json" if settings.expose_api_docs else None,
-)
-
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-# DA-73: erros com `code` estavel (app/api_errors.py) - as UIs traduzem pelo code
-app.add_exception_handler(CodedHTTPException, coded_http_exception_handler)
-# Avaliacao externa (medio prazo, item 1): sem este middleware,
-# "default_limits" do Limiter (app/rate_limit.py) so valia para rotas
-# com "@limiter.limit(...)" explicito - /a2a, /mcp e /health ficavam
-# sem NENHUM rate limit. Com o middleware, o default passa a valer
-# tambem para essas rotas (/a2a ainda ganha seu proprio decorator
-# explicito, ver app/a2a/server.py, pelo mesmo motivo de /diagnose ja
-# ter um).
-app.add_middleware(SlowAPIMiddleware)
+api = APIRouter()
 
 
 # Paginas servidas por este app (Admin UI Jinja2 e o bundle React) nao tem
@@ -365,16 +354,6 @@ class CspMiddleware:
         await self.app(scope, receive, send_with_csp)
 
 
-app.add_middleware(CspMiddleware)
-
-# Validacao 2026-10-07 (M-14): setup_metrics existia mas nunca era chamado -
-# /metrics dava 404 mesmo com PROMETHEUS_ENABLED=true. Precisa ser no nivel de
-# modulo: o Instrumentator adiciona middleware, o que nao e permitido depois
-# que o app comeca a servir.
-setup_metrics(app)
-
-
-@app.exception_handler(RequestValidationError)
 def _validation_error_handler(request: Request, exc: RequestValidationError):
     """Validacao 2026-10-07 (M-15): o 422 padrao do FastAPI devolve o campo
     `input` de cada erro - o VALOR recebido. Em /diagnose, `payload` e
@@ -388,7 +367,6 @@ def _validation_error_handler(request: Request, exc: RequestValidationError):
     return JSONResponse(status_code=422, content={"detail": errors})
 
 
-@app.exception_handler(Exception)
 def _unhandled_error_handler(request: Request, exc: Exception):
     """Validacao 2026-10-07 (M-15): 500 sem rastreabilidade. Agora cada erro
     nao tratado ganha um `error_id`, logado junto com o stack trace - o
@@ -404,7 +382,6 @@ def _unhandled_error_handler(request: Request, exc: Exception):
     )
 
 
-@app.exception_handler(DiagnosisOverloadedError)
 def _diagnosis_overloaded_handler(request: Request, exc: DiagnosisOverloadedError):
     """Capacidade esgotada nao e timeout: 503 + Retry-After (o cliente pode
     reenviar), em vez do 504 que o handler de DiagnosisTimeoutError daria."""
@@ -435,7 +412,6 @@ def _gateway_refusal(request: Request, exc: Exception, code: str, detail: str) -
     )
 
 
-@app.exception_handler(BudgetExhaustedError)
 def _budget_exhausted_handler(request: Request, exc: BudgetExhaustedError):
     """Sem Retry-After: reenviar o mesmo incidente abre um orcamento novo
     com o mesmo limite e os mesmos precos - so muda com DIAGNOSIS_BUDGET_USD
@@ -449,7 +425,6 @@ def _budget_exhausted_handler(request: Request, exc: BudgetExhaustedError):
     )
 
 
-@app.exception_handler(PolicyViolationError)
 def _policy_violation_handler(request: Request, exc: PolicyViolationError):
     return _gateway_refusal(
         request,
@@ -460,7 +435,6 @@ def _policy_violation_handler(request: Request, exc: PolicyViolationError):
     )
 
 
-@app.exception_handler(DiagnosisTimeoutError)
 def _diagnosis_timeout_handler(request: Request, exc: DiagnosisTimeoutError):
     """Avaliacao externa (curto prazo, item 4): converte o watchdog de
     settings.diagnosis_timeout_seconds (app/agent/graph.py) num 504
@@ -495,18 +469,8 @@ _STATIC_DIST_DIR = Path(settings.ui_dist_dir)
 _STATIC_DIST_ASSETS_DIR = _STATIC_DIST_DIR / "assets"
 _STATIC_DIST_INDEX = _STATIC_DIST_DIR / "index.html"
 
-if _STATIC_DIST_ASSETS_DIR.is_dir():
-    app.mount("/assets", StaticFiles(directory=str(_STATIC_DIST_ASSETS_DIR)), name="assets")
-else:
-    logger.warning(
-        "%s nao encontrado - bundle de UI nao foi buildado ('npm ci && npm run build "
-        "-w <shell>' na raiz, ou 'docker compose build'). A API sobe normalmente, mas "
-        "GET / devolvera 404 ate o bundle existir.",
-        _STATIC_DIST_ASSETS_DIR,
-    )
 
-
-@app.get("/", response_model=None)
+@api.get("/", response_model=None)
 def index() -> FileResponse | JSONResponse:
     if not _STATIC_DIST_INDEX.is_file():
         return JSONResponse(
@@ -529,8 +493,8 @@ def index() -> FileResponse | JSONResponse:
 _STATIC_DIST_ROOT_FILES = {"favicon.svg": "image/svg+xml", "icons.svg": "image/svg+xml"}
 
 
-@app.get("/favicon.svg", include_in_schema=False, response_model=None)
-@app.get("/icons.svg", include_in_schema=False, response_model=None)
+@api.get("/favicon.svg", include_in_schema=False, response_model=None)
+@api.get("/icons.svg", include_in_schema=False, response_model=None)
 def static_root_file(request: Request) -> FileResponse | Response:
     name = request.url.path.lstrip("/")
     path = _STATIC_DIST_INDEX.parent / name
@@ -669,7 +633,7 @@ def _caller_is_authenticated(request: Request) -> bool:
     return verify_session_cookie(request) is not None
 
 
-@app.get("/health")
+@api.get("/health")
 def health(request: Request) -> dict:
     """Liveness probe - confirma apenas que o processo FastAPI esta de pe.
     NAO faz chamadas externas (Qdrant/Ollama) e sempre retorna 200.
@@ -687,7 +651,7 @@ def health(request: Request) -> dict:
     return {"status": "ok", **_status_body()}
 
 
-@app.get("/ready")
+@api.get("/ready")
 def ready(request: Request) -> Response:
     """Readiness probe - probe real em Qdrant/Ollama/Redis (DA-35). Retorna
     503 quando algum servico configurado esta degradado (A-11) ou quando
@@ -714,7 +678,7 @@ def ready(request: Request) -> Response:
     )
 
 
-@app.post(
+@api.post(
     "/diagnose",
     response_model=DiagnosisResponse,
     dependencies=[Depends(verify_session_or_api_key)],
@@ -736,7 +700,7 @@ def diagnose(request: Request, body: IncidentRequest) -> DiagnosisResponse:
         ) from exc
 
 
-@app.post(
+@api.post(
     "/diagnose/async",
     status_code=status.HTTP_202_ACCEPTED,
     dependencies=[Depends(verify_session_or_api_key)],
@@ -769,7 +733,7 @@ def diagnose_async(request: Request, body: IncidentRequest) -> dict[str, str]:
     return {"job_id": job_id, "status": "queued"}
 
 
-@app.get(
+@api.get(
     "/diagnose/async/{job_id}",
     dependencies=[Depends(verify_session_or_api_key)],
 )
@@ -798,7 +762,7 @@ def diagnose_async_status(job_id: str) -> dict[str, object]:
     return job_status
 
 
-@app.post(
+@api.post(
     "/events/incident",
     status_code=status.HTTP_202_ACCEPTED,
     dependencies=[Depends(verify_event_mesh_api_key)],
@@ -841,7 +805,7 @@ def incident_event_webhook(
     return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=body)
 
 
-@app.post(
+@api.post(
     "/incidents/{incident_id}/verify",
     dependencies=[Depends(verify_session_or_api_key)],
 )
@@ -951,7 +915,7 @@ def verify_incident_endpoint(
 
 
 # DA-75: endpoint para revisao humana de diagnostico interrompido
-@app.post(
+@api.post(
     "/incidents/{incident_id}/review",
     dependencies=[Depends(verify_session_or_api_key)],
 )
@@ -1023,7 +987,6 @@ def review_incident_endpoint(
     }
 
 
-@app.middleware("http")
 async def contract_version_middleware(request: Request, call_next):
     required = request.headers.get("X-Core-Contract-Version", "1.0")
     if not compatible_version(required, HTTP_CONTRACT_VERSION):
@@ -1040,7 +1003,7 @@ async def contract_version_middleware(request: Request, call_next):
     return response
 
 
-@app.get("/domain-plugins", dependencies=[Depends(verify_session_or_api_key)])
+@api.get("/domain-plugins", dependencies=[Depends(verify_session_or_api_key)])
 def domain_plugins_catalog() -> dict:
     """DA-95: plugins de dominio carregados e o JSON Schema do `domain_context`
     de cada um. E' o contrato que os shells de UI usam para gerar o formulario
@@ -1053,7 +1016,7 @@ def domain_plugins_catalog() -> dict:
     }
 
 
-@app.get("/llm/policy", dependencies=[Depends(verify_session_or_api_key)])
+@api.get("/llm/policy", dependencies=[Depends(verify_session_or_api_key)])
 def llm_policy() -> dict:
     """DA-43: policy de soberanca de dados do AI Gateway, em vigor agora.
 
@@ -1069,23 +1032,91 @@ def llm_policy() -> dict:
     return describe_effective_policy()
 
 
-@app.get("/.well-known/agent-card.json")
 def agent_card() -> dict:
     return get_agent_card()
 
 
-app.include_router(auth_router)  # DA-54: /auth/login, /auth/logout, /auth/session
-app.include_router(a2a_router)
-app.include_router(admin_router)  # DA-46/47/48: /admin/api/* (ADMIN_API_KEY)
-app.include_router(admin_ui_router)
-# JS/CSS da Admin UI (CSP `script-src 'self'` proibe script inline).
-app.mount(
-    "/admin/static",
-    StaticFiles(directory=str(Path(__file__).parent / "admin" / "static")),
-    name="admin-static",
-)  # /admin pages (shell Jinja2, dados via API)
+def create_app(interfaces: AgentInterfaces | None = None) -> FastAPI:
+    """Cria um app por composição. None mantém o ponto de entrada histórico."""
+    app = FastAPI(
+        title="SAP Integration Copilot",
+        description="Assistente de IA para diagnostico de incidentes de integracao SAP",
+        version="1.4.0",
+        lifespan=lifespan,
+        # DEP-01: docs desligaveis em producao (EXPOSE_API_DOCS=false).
+        docs_url="/docs" if settings.expose_api_docs else None,
+        redoc_url="/redoc" if settings.expose_api_docs else None,
+        openapi_url="/openapi.json" if settings.expose_api_docs else None,
+    )
 
-# DA-19: servidor MCP montado em /mcp - ver app/mcp/server.py para o
-# contrato de ferramentas (diagnose_incident, list_connectors) e a
-# justificativa arquitetural completa.
-app.mount("/mcp", build_mcp_asgi_app())
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    # DA-73: erros com `code` estavel (app/api_errors.py) - as UIs traduzem pelo code
+    app.add_exception_handler(CodedHTTPException, coded_http_exception_handler)
+    # Avaliacao externa (medio prazo, item 1): sem este middleware,
+    # "default_limits" do Limiter (app/rate_limit.py) so valia para rotas
+    # com "@limiter.limit(...)" explicito - /a2a, /mcp e /health ficavam
+    # sem NENHUM rate limit. Com o middleware, o default passa a valer
+    # tambem para essas rotas (/a2a ainda ganha seu proprio decorator
+    # explicito, ver app/a2a/server.py, pelo mesmo motivo de /diagnose ja
+    # ter um).
+    app.add_middleware(SlowAPIMiddleware)
+    app.add_middleware(CspMiddleware)
+    setup_metrics(app)
+    app.add_exception_handler(RequestValidationError, _validation_error_handler)
+    app.add_exception_handler(Exception, _unhandled_error_handler)
+    app.add_exception_handler(DiagnosisOverloadedError, _diagnosis_overloaded_handler)
+    app.add_exception_handler(BudgetExhaustedError, _budget_exhausted_handler)
+    app.add_exception_handler(PolicyViolationError, _policy_violation_handler)
+    app.add_exception_handler(DiagnosisTimeoutError, _diagnosis_timeout_handler)
+
+    app.middleware("http")(contract_version_middleware)
+
+    if _STATIC_DIST_ASSETS_DIR.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_STATIC_DIST_ASSETS_DIR)), name="assets")
+    else:
+        logger.warning(
+            "%s nao encontrado - bundle de UI nao foi buildado ('npm ci && npm run build "
+            "-w <shell>' na raiz, ou 'docker compose build'). A API sobe normalmente, mas "
+            "GET / devolvera 404 ate o bundle existir.",
+            _STATIC_DIST_ASSETS_DIR,
+        )
+    # SlowAPI precisa enxergar os endpoints na lista de rotas do app.
+    app.router.routes.extend(api.routes)
+
+    if interfaces is None:
+        app.get("/.well-known/agent-card.json")(agent_card)
+    elif interfaces.a2a is not None:
+        card = deepcopy(dict(interfaces.a2a.card))
+        app.state.a2a_task_manager = TaskManager(
+            interfaces.a2a.diagnose,
+            task_store=get_default_task_store(namespace=interfaces.a2a.task_namespace),
+        )
+
+        @app.get("/.well-known/agent-card.json")
+        def product_agent_card() -> dict:
+            return get_agent_card(card)
+
+    app.include_router(auth_router)
+    if interfaces is None or interfaces.a2a is not None:
+        app.include_router(a2a_router)
+    app.include_router(admin_router)
+    app.include_router(admin_ui_router)
+    app.mount(
+        "/admin/static",
+        StaticFiles(directory=str(Path(__file__).parent / "admin" / "static")),
+        name="admin-static",
+    )
+
+    server = (
+        mcp_server
+        if interfaces is None
+        else (ProductMCPServer(interfaces.mcp) if interfaces.mcp is not None else None)
+    )
+    app.state.mcp_server = server
+    if server is not None:
+        app.mount("/mcp", build_mcp_asgi_app(server))
+    return app
+
+
+app = create_app()

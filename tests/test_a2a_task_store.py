@@ -166,3 +166,17 @@ def test_in_memory_task_store_default_limit_is_large():
     from app.a2a.task_store import _IN_MEMORY_MAX_TASKS
 
     assert _IN_MEMORY_MAX_TASKS >= 100
+
+
+def test_redis_task_store_isolates_product_namespaces():
+    client = FakeRedis()
+    legacy = RedisTaskStore(client)
+    first = RedisTaskStore(client, namespace="first")
+    second = RedisTaskStore(client, namespace="second")
+    task = _sample_task()
+
+    first.set(task)
+
+    assert first.get(task.id) is not None
+    assert second.get(task.id) is None
+    assert legacy.get(task.id) is None
