@@ -30,6 +30,8 @@ from app.contracts.versioning import (
     SDK_CONTRACT_VERSION,
     compatible_version,
 )
+from app.exceptions import DiagnosisOverloadedError
+from app.sdk.interfaces import A2AConfig, AgentInterfaces, MCPConfig, MCPTool, ToolPolicy
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -42,17 +44,26 @@ __all__ = [
     "HTTP_CONTRACT_VERSION",
     "PLUGIN_CONTRACT_VERSION",
     "SDK_CONTRACT_VERSION",
+    "A2AConfig",
+    "AgentInterfaces",
+    "DiagnosisOverloadedError",
     "DomainPlugin",
     "DomainPrompt",
+    "MCPConfig",
+    "MCPTool",
+    "ToolPolicy",
     "asgi_app",
     "base_prompt_digest",
     "compatible_version",
+    "connector_catalog",
     "dense_embedder",
     "domain_prompt_digest",
     "domain_prompt_provenance",
     "incident_request",
+    "legacy_agent_interfaces",
     "plugin_catalog",
     "qdrant_client",
+    "registered_tool_policy",
     "run_diagnosis",
     "sparse_vector",
 ]
@@ -61,12 +72,15 @@ __all__ = [
 # --- API e diagnostico --------------------------------------------------------
 
 
-def asgi_app() -> FastAPI:
+def asgi_app(*, interfaces: AgentInterfaces | None = None) -> FastAPI:
     """App ASGI do core. Configure o ambiente (DOMAIN_PLUGINS, UI_DIST_DIR)
-    ANTES de chamar: o app le a configuracao na importacao."""
-    from app.main import app
+    ANTES de chamar: o app le a configuracao na importacao.
+    Sem interfaces, preserva o app legado. Uma configuração explícita cria
+    um app independente com somente os protocolos selecionados.
+    """
+    from app.main import app, create_app
 
-    return app
+    return app if interfaces is None else create_app(interfaces)
 
 
 def incident_request(**fields: Any) -> IncidentRequest:
@@ -81,6 +95,38 @@ def run_diagnosis(request: IncidentRequest, **kwargs: Any) -> DiagnosisResponse:
     from app.agent.graph import run_diagnosis as _run
 
     return _run(request, **kwargs)
+
+
+def legacy_agent_interfaces(*, task_namespace: str) -> AgentInterfaces:
+    """Compatibilidade temporária para consumidores das interfaces históricas."""
+    from app.a2a.agent_card import AGENT_CARD
+    from app.mcp.policy import DEFAULT_EXECUTION_CONTEXT
+    from app.mcp.server import diagnose_incident, list_connectors, mcp
+
+    tools = tuple(
+        MCPTool(handler.__name__, handler, registered_tool_policy(handler.__name__))
+        for handler in (diagnose_incident, list_connectors)
+    )
+    return AgentInterfaces(
+        a2a=A2AConfig(AGENT_CARD, run_diagnosis, task_namespace),
+        mcp=MCPConfig(
+            mcp.name, mcp.version, tools, DEFAULT_EXECUTION_CONTEXT.granted_scopes, mcp.instructions
+        ),
+    )
+
+
+def connector_catalog() -> list[dict]:
+    """Consulta o catálogo de conectores sem realizar chamadas externas."""
+    from app.mcp.server import connector_catalog as catalog
+
+    return catalog()
+
+
+def registered_tool_policy(name: str) -> ToolPolicy:
+    """Política declarativa compartilhada para uma capability existente."""
+    from app.mcp.policy import CAPABILITY_REGISTRY
+
+    return CAPABILITY_REGISTRY[name]
 
 
 def plugin_catalog() -> list[dict[str, Any]]:

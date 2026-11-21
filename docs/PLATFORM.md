@@ -5,7 +5,7 @@ Não contém shells de produto, não é serviço remoto obrigatório e não copi
 a implementação fiscal. Mantém capacidades SAP/SaaS/genéricas já existentes;
 neutralidade de repositório não significa remoção das regras multivendor.
 
-As versões são independentes: core Python 1.4.1, core-ui 0.1.1 e operações 1.0.1.
+As versões são independentes: core Python 1.5.0, core-ui 0.1.1 e operações 1.0.2.
 As migrations mantêm IDs e conteúdo; sua versão de distribuição é diferente
 da versão do SDK. Combinações testadas são registradas no manifesto de build
 e na configuração operations/component.toml.

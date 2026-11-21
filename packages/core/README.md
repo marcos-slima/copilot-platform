@@ -1,6 +1,6 @@
 # Copilot Core
 
-Biblioteca Python compartilhada 1.4.1. Imports públicos de produto usam app.sdk.
+Biblioteca Python compartilhada 1.5.0. Imports públicos de produto usam app.sdk.
 O core não importa IIC ou FISC. Contratos HTTP/SDK 1.0 e plugin 1.1.
 O pacote inclui templates, traduções, ontologia e skills.
 

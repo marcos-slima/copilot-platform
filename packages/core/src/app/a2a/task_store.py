@@ -110,12 +110,13 @@ class RedisTaskStore:
     O A2A server continua operando - apenas perde persistencia enquanto
     o Redis estiver indisponivel."""
 
-    def __init__(self, client) -> None:
+    def __init__(self, client, *, namespace: str | None = None) -> None:
         self._client = client
+        self._prefix = _REDIS_KEY_PREFIX if namespace is None else f"a2a:product:{namespace}:task:"
 
     def get(self, task_id: str) -> A2ATask | None:
         try:
-            raw = self._client.get(_REDIS_KEY_PREFIX + task_id)
+            raw = self._client.get(self._prefix + task_id)
         except Exception:
             _logger.warning(
                 "[task_store] Redis indisponivel em get(task_id=%s) — "
@@ -131,7 +132,7 @@ class RedisTaskStore:
     def set(self, task: A2ATask) -> None:
         try:
             self._client.set(
-                _REDIS_KEY_PREFIX + task.id,
+                self._prefix + task.id,
                 self._serialize(task),
                 ex=_REDIS_TASK_TTL_SECONDS,
             )
@@ -181,7 +182,7 @@ def _get_redis_client():
     return redis.Redis.from_url(settings.redis_url)
 
 
-def get_default_task_store() -> TaskStore:
+def get_default_task_store(*, namespace: str | None = None) -> TaskStore:
     if not settings.redis_url:
         return InMemoryTaskStore()
-    return RedisTaskStore(_get_redis_client())
+    return RedisTaskStore(_get_redis_client(), namespace=namespace)

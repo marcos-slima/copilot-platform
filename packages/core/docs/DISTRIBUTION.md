@@ -4,7 +4,7 @@ A fonte canônica é Copilot Platform. Os três componentes têm versões própr
 
 | Componente | Manifest | Artefato público |
 |---|---|---|
-| copilot-core 1.4.1 | packages/core/pyproject.toml | wheel/sdist em core/v1.4.1 |
+| copilot-core 1.5.0 | packages/core/pyproject.toml | wheel/sdist em core/v1.5.0 após promoção |
 | @copilot/core-ui 0.1.1 | packages/core-ui/package.json | tarball em core-ui/v0.1.1 |
 | copilot-operations 1.0.0 | operations/component.toml | tar.gz em operations/v1.0.0 |
 
